@@ -6,10 +6,11 @@
 #include <chrono>
 #include <rtl-sdr.h>
 
-#define DEFAULT_SAMPLE_RATE   2400000   // 2.4 MHz for ADS-B
+// #define DEFAULT_SAMPLE_RATE   2400000   // 2.4 MHz for ADS-B
+#define DEFAULT_SAMPLE_RATE   2000000   // 2 MHz for dump1090 suitable ADS-B 
 #define DEFAULT_FREQUENCY     1090000000  // 1090 MHz (ADS-B)
 #define DEFAULT_GAIN          0           // Auto
-#define CAPTURE_DURATION_SEC  5           // Capture time in seconds
+#define CAPTURE_DURATION_SEC  3           // Capture time in seconds
 
 #define BUFFER_LENGTH         (CAPTURE_DURATION_SEC * DEFAULT_SAMPLE_RATE * 2)  //  bytes per read
 

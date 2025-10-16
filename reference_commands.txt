@@ -1,0 +1,10 @@
+get ADSB data in a suitable format for dump1090 into a binary file 'output.bin': 
+rtl_sdr -f 1090000000 -s 2000000 -g 50 output.bin
+
+get ADSB decoding of a binary file flight1.bin using dump1090:
+../dump1090/dump1090 --interactive --ifile ./flight1.bin 
+
+../dump1090/dump1090 --interactive
+
+
+../dump1090/dump1090 --interactive --ifile ./iq_samples_20251016_200629.bin

@@ -1,5 +1,6 @@
 import numpy as np
 from math import floor, cos, acos, pi
+global_filename = "flight_20251016_01.bin"
 
 # -------------------------
 # 1. Read IQ samples
@@ -72,7 +73,7 @@ def bits_to_int(bits, i, length):
 # 6. Altitude decoding (per mode-s spec)
 # -------------------------
 def decode_altitude(bits, type_code):
-    def decode_altitude(bits, type_code):
+    
     """
     Decode the 12-bit altitude field (bits 41–52 of ME).
     Returns (altitude_value, source_string).

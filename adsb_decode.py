@@ -1,6 +1,6 @@
 import numpy as np
 from math import floor, cos, acos, pi
-global_filename = "flight_20251016_01.bin"
+
 
 # -------------------------
 # 1. Read IQ samples
@@ -189,15 +189,24 @@ def process_iq(filename):
             # we already have the other frame, try decode
             # pick the pair (even, odd)
             if 0 in cpr_store and 1 in cpr_store:
-                 lat, lon = cpr_global(
-                         cpr_store[0][0], cpr_store[1][0],
-                  cpr_store[0][1], cpr_store[1][1],
-                  cpr_store[0][2], cpr_store[1][2]
-    )
-    print(f"Decoded position: lat={lat:.6f}, lon={lon:.6f}, Altitude={alt} ({alt_type})")
+                lat, lon = cpr_global(
+                    cpr_store[0][0], cpr_store[1][0],
+                    cpr_store[0][1], cpr_store[1][1],
+                    cpr_store[0][2], cpr_store[1][2]) 
+ 
+                if lat is not None and lon is not None:
+                   print(f"Decoded position: lat={lat:.6f}, lon={lon:.6f}, Altitude={alt} ({alt_type})")
+                else:
+                   print("CPR decode failed")
+                           
+                 
+
+    
 
 
 
     print("Done.")
 
 
+if __name__ == "__main__":
+    process_iq("flight_20251016_03.bin")

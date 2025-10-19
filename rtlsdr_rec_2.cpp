@@ -1,5 +1,6 @@
 // data capture from the RTL-SDR device at 2 MHz sample rate and 1090 MHz frequency
 // suitable for ADS-B signals used in dump1090
+// Author: 
 #include <iostream> 
 #include <cstdio> 
 #include <cstdlib> // for EXIT_SUCCESS and EXIT_FAILURE

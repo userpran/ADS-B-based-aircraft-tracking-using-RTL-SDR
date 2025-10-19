@@ -1,9 +1,11 @@
+// data capture from the RTL-SDR device at 2 MHz sample rate and 1090 MHz frequency
+
 #include <iostream> 
 #include <cstdio> 
 #include <cstdlib> // for EXIT_SUCCESS and EXIT_FAILURE
 #include <cstring> // for memset()
 #include <ctime> // for time functions
-#include <chrono> // for high-resolution timing
+#include <chrono>     // for high-resolution timing
 #include <unistd.h>  // for access()
 #include <rtl-sdr.h>
 

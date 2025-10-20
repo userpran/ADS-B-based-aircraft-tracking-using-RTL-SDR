@@ -9,8 +9,10 @@ import os
 # ----------------------
 # Step 1: Input/output files
 # ----------------------
-input_file = "flight_20251016_03.bin"  # raw IQ samples at 2 MHz
+input_file = "flight_20251016_03.bin"  # raw IQ samples with fs = 2 MHz
 output_csv = "decoded_summary.csv"
+# print ("got input file", input_file)
+# exit()  # for testing purposes
 
 if not os.path.isfile(input_file):
     raise FileNotFoundError(f"Input file '{input_file}' not found.")
@@ -34,7 +36,8 @@ def detect_preambles(iq, threshold=0.5):
     print("length of magnitude array: ", len(magnitude))
     preambles = [] # List to hold preamble positions
 
-    for i in range(len(magnitude) - PREAMBLE_SAMPLES): 
+    i = 0
+    while i < (len(magnitude) - PREAMBLE_SAMPLES): 
         window = magnitude[i:i+PREAMBLE_SAMPLES] # 16-sample window
         # Preamble pattern: 1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0
 
@@ -43,18 +46,25 @@ def detect_preambles(iq, threshold=0.5):
         # print("checking index:", i)
         # print("current window being checked for preamble:", window)
         
-        corr = np.sum((window > 0.5).astype(int) == np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0])) # Correlation score
+        corr = np.sum((window > threshold).astype(int) == np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0])) # Correlation score
         if corr >= 14: # At least 14/16 matches
             print("detected preambles are at index:", i)
-            print("detected preamble window:", window)
+            # print("detected preamble window:", window)
             
             preambles.append(i)
+            # Skip ahead by 16 + (112 * 2) samples
+            i += 16 + (112 * 2)
+        else:
+            i += 1  # Move one sample at a time
+
     return preambles
+
+
 
 preamble_positions = detect_preambles(iq)
 print(f"Detected {len(preamble_positions)} preambles")
-
-# ----------------------
+print("Preamble positions: ", preamble_positions)
+exit()
 
 # ----------------------
 # Step 4: Extract 112-bit messages with dynamic preamble shift
@@ -62,8 +72,7 @@ print(f"Detected {len(preamble_positions)} preambles")
 BIT_SAMPLES = 2          # 2 samples per bit at 2 MHz
 PREAMBLE_SAMPLES = 8 * BIT_SAMPLES    # 16 samples per 8 µs preamble
 
-# copilot note: modified extract_bits to be vectorized for performance
-# ...existing code...
+# copilot modified version of extract_bits()
 def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMBLE_SAMPLES):
     """
     Vectorized extraction of up to 112 bits. Returns a list of bits.
@@ -80,22 +89,17 @@ def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMB
 
     start = start_idx + preamble_samples
     
-    # why did we ever have this?
-    # use magnitude instead of real part (phase invariant)
-    # block = iq[start:start + n_bits * bit_samples]
-    # windows = np.abs(block).reshape(n_bits, bit_samples)  # shape (n_bits, bit_samples)
-    # means = windows.mean(axis=1, dtype=np.float64)
-    # bits = (means > some_threshold).astype(int).tolist()
-    
 
-    # derive threshold from the preamble samples (data-driven)
+    # derive threshold from normalized preamble samples (data-driven)
+
+
     preamble_slice = np.abs(iq[start_idx:start_idx + preamble_samples]).astype(np.float32)
-    mn = preamble_slice.min() # preamble min
-    mx = preamble_slice.max() # preamble max
-    rng = mx - mn # difference between preamble max and min (range)
-    
-    if rng > 1e-12: # avoid division by zero
-        ps_norm = (preamble_slice - mn) / rng # normalized preamble
+    preamble_min = preamble_slice.min() # preamble min
+    preamble_max = preamble_slice.max() # preamble max
+    preamble_range = preamble_max - preamble_min # difference between preamble max and min (range)
+
+    if preamble_range > 1e-12: # avoid division by zero
+        ps_norm = (preamble_slice - preamble_min) / preamble_range # normalized preamble
     else:
         # degenerate: tiny range -> fallback to zeros to avoid NaNs
         ps_norm = np.zeros_like(preamble_slice) # normalized preamble fallback
@@ -105,29 +109,28 @@ def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMB
     try:
         pulse_mean = ps_norm[pattern].mean() # mean of pulse positions
         noise_mean = ps_norm[~pattern].mean() # mean of noise positions
-        some_threshold = 0.5 * (pulse_mean + noise_mean) # midpoint threshold
+        preamble_threshold = 0.5 * (pulse_mean + noise_mean)  # midpoint threshold between preamble pulse and noise
     except Exception:
-        some_threshold = 0.5  # safe fallback if something goes wrong
+        preamble_threshold = 0.5  # safe fallback if something goes wrong
 
-    # normalize the message block using same mn/mx so "some_threshold" is meaningful
-    block = np.abs(iq[start:start + n_bits * bit_samples]).astype(np.float32)  # use magnitude
-    b_mn = block.min() # message block min 
-    b_mx = block.max() # message block max
-    b_rng = b_mx - b_mn # message block range
-    
-    if b_rng > 1e-12:
-        block_norm = (block - b_mn) / b_rng  # normalize message block
+    # normalize the message block using same mn/mx so "preamble_threshold" is meaningful
+    msg_block = np.abs(iq[start:start + n_bits * bit_samples]).astype(np.float32)  # use magnitude
+    b_mn = msg_block.min() # message block min 
+    b_mx = msg_block.max() # message block max
+    block_range = b_mx - b_mn # message block range
+
+    if block_range > 1e-12:
+        block_norm = (msg_block - b_mn) / block_range  # normalize message block
     else:
         # if preamble was degenerate, use robust local scaling for block
-        block_norm = (block - np.median(block)) / (np.std(block) + 1e-12) # robust normalization fallback
+        block_norm = (msg_block - np.median(msg_block)) / (np.std(msg_block) + 1e-12) # robust normalization fallback
 
     windows = block_norm.reshape(n_bits, bit_samples) # shape (n_bits, bit_samples)
     means = windows.mean(axis=1, dtype=np.float64) # mean per bit
-    bits = (means > some_threshold).astype(int).tolist() # thresholding to bits
+    bits = (means > preamble_threshold).astype(int).tolist() # thresholding to bits
     
     return bits
 
-# ...existing code...
 
 ''' # chatgpt original
 def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMBLE_SAMPLES):
@@ -147,11 +150,17 @@ def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMB
 '''
 
 def bits_to_hex(bits):
-    """
-    Convert list of bits to hex string for pyModeS.
-    """
+    # Convert list of bits to hex string for pyModeS.
+
+    # to convert 112-bit aircraft messages from 0b to a 28-character 0x string 
+    # width of 28 characters is because ADS-B messages have standardized length
     s = ''.join(str(b) for b in bits)
-    return '{:028X}'.format(int(s, 2))
+    s_int = int(s, 2) # converts a string s to an integer with base 2 (specified by '2')
+
+    # '{:028X}'.format(): string formatting operation to converts the integer to hexadecimal: 
+    # 0 -> to pad with zeros instead of spaces
+    # 28 -> width of the output (28 characters)
+    return '{:028X}'.format(s_int)  # 112 bits = 28 hex digits
 
 def extract_valid_hex(iq, preamble_idx, shift_range=(-2,3)):
     """
@@ -175,11 +184,18 @@ def extract_valid_hex(iq, preamble_idx, shift_range=(-2,3)):
 messages_list = []
 aircraft_state = {}  # ICAO -> last even/odd DF17 messages
 
+iteration_count = 0
 for idx in preamble_positions:
+    iteration_count += 1 # to keep track of number of iterations
+    print(f"\n\nProcessing preamble {iteration_count}/{len(preamble_positions)} at index {idx}")
+    
     bits = extract_bits(iq, idx)
+
     if len(bits) != 112:
         continue
+    
     hex_msg = bits_to_hex(bits)
+    print(f"Extracted hex message: {hex_msg}")
 
     try:
         if pms.df(hex_msg) != 17:
@@ -190,11 +206,14 @@ for idx in preamble_positions:
             continue
 
         icao = pms.icao(hex_msg)
+        print(f"ICAO: {icao}")
         type_code = pms.typecode(hex_msg)
+        print(f"Type Code: {type_code}")
+
 
         if icao not in aircraft_state:
             aircraft_state[icao] = {"even": None, "odd": None}
-
+        
         row = {"Hex": icao, "Flight": "", "Altitude": "", "Speed": "",
                "Lat": "", "Lon": "", "Track": ""}
 
@@ -207,10 +226,14 @@ for idx in preamble_positions:
         # Altitude / Position
         if type_code >= 9 and type_code <= 18:
             alt = pms.altitude(hex_msg)
+            print(f"altitude: {alt}")
+
             if alt is not None:
                 row["Altitude"] = alt
 
-            oe = pms.oe_flag(hex_msg)
+            oe = pms.oe_flag(hex_msg) # even/odd flag
+            print(f"odd/even flag: {oe}")
+
             if oe == 0:
                 aircraft_state[icao]["even"] = hex_msg
             else:
@@ -220,6 +243,8 @@ for idx in preamble_positions:
             odd_msg = aircraft_state[icao]["odd"]
             if even_msg and odd_msg:
                 lat, lon = pms.position(even_msg, odd_msg)
+                print(f"latitude: {lat}, longitude: {lon}")
+
                 if lat is not None and lon is not None:
                     row["Lat"] = lat
                     row["Lon"] = lon
@@ -228,6 +253,8 @@ for idx in preamble_positions:
         if type_code >= 19 and type_code <= 27:
             speed = pms.airspeed(hex_msg)
             heading = pms.heading(hex_msg)
+            print(f"speed: {speed}, heading: {heading}")
+
             if speed is not None:
                 row["Speed"] = speed
             if heading is not None:

@@ -80,26 +80,50 @@ def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMB
 
     start = start_idx + preamble_samples
     
+    # why did we ever have this?
     # use magnitude instead of real part (phase invariant)
-    block = iq[start:start + n_bits * bit_samples]
-    windows = np.abs(block).reshape(n_bits, bit_samples)  # shape (n_bits, bit_samples)
-    means = windows.mean(axis=1, dtype=np.float64)
+    # block = iq[start:start + n_bits * bit_samples]
+    # windows = np.abs(block).reshape(n_bits, bit_samples)  # shape (n_bits, bit_samples)
+    # means = windows.mean(axis=1, dtype=np.float64)
     # bits = (means > some_threshold).astype(int).tolist()
     
 
     # derive threshold from the preamble samples (data-driven)
-    preamble_slice = np.abs(iq[start_idx:start_idx + preamble_samples]) # use magnitude
-    # preamble pattern indices (1s at these sample positions)
+    preamble_slice = np.abs(iq[start_idx:start_idx + preamble_samples]).astype(np.float32)
+    mn = preamble_slice.min() # preamble min
+    mx = preamble_slice.max() # preamble max
+    rng = mx - mn # difference between preamble max and min (range)
+    
+    if rng > 1e-12: # avoid division by zero
+        ps_norm = (preamble_slice - mn) / rng # normalized preamble
+    else:
+        # degenerate: tiny range -> fallback to zeros to avoid NaNs
+        ps_norm = np.zeros_like(preamble_slice) # normalized preamble fallback
+
     pattern = np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0], dtype=bool)
+    
     try:
-        pulse_mean = preamble_slice[pattern].mean() # mean of pulse positions
-        noise_mean = preamble_slice[~pattern].mean() # mean of noise positions
+        pulse_mean = ps_norm[pattern].mean() # mean of pulse positions
+        noise_mean = ps_norm[~pattern].mean() # mean of noise positions
         some_threshold = 0.5 * (pulse_mean + noise_mean) # midpoint threshold
     except Exception:
-        # fallback if preamble missing or degenerate
-        some_threshold = np.median(means)  # or use fixed 0.5 if you normalized earlier
+        some_threshold = 0.5  # safe fallback if something goes wrong
 
-    bits = (means > some_threshold).astype(int).tolist()
+    # normalize the message block using same mn/mx so "some_threshold" is meaningful
+    block = np.abs(iq[start:start + n_bits * bit_samples]).astype(np.float32)  # use magnitude
+    b_mn = block.min() # message block min 
+    b_mx = block.max() # message block max
+    b_rng = b_mx - b_mn # message block range
+    
+    if b_rng > 1e-12:
+        block_norm = (block - b_mn) / b_rng  # normalize message block
+    else:
+        # if preamble was degenerate, use robust local scaling for block
+        block_norm = (block - np.median(block)) / (np.std(block) + 1e-12) # robust normalization fallback
+
+    windows = block_norm.reshape(n_bits, bit_samples) # shape (n_bits, bit_samples)
+    means = windows.mean(axis=1, dtype=np.float64) # mean per bit
+    bits = (means > some_threshold).astype(int).tolist() # thresholding to bits
     
     return bits
 

@@ -1,7 +1,7 @@
 # ----------------------
 # ADS-B Python Decoder with dynamic CPR pairing
 # ----------------------
-import numpy as np
+import numpy as np # 
 import pyModeS as pms
 import pandas as pd
 import os
@@ -18,22 +18,36 @@ if not os.path.isfile(input_file):
 # ----------------------
 # Step 2: Read raw IQ samples
 # ----------------------
-raw = np.fromfile(input_file, dtype=np.int8)
-iq = raw.astype(np.float32).view(np.complex64)
+raw = np.fromfile(input_file, dtype=np.int8) # Read raw IQ samples
+iq = raw.astype(np.float32).view(np.complex64) # Convert to complex64
+# find size of raw and iq
+print(f"Total raw samples read: {len(raw)}")
 print(f"Total IQ samples read: {len(iq)}")
 
 # ----------------------
 # Step 3: Preamble detection (2 MHz)
 # ----------------------
 PREAMBLE_SAMPLES = 16  # 8 µs at 2 MHz
-def detect_preambles(iq, threshold=0.5):
-    magnitude = np.abs(iq)
-    magnitude = (magnitude - np.min(magnitude)) / (np.max(magnitude) - np.min(magnitude))
-    preambles = []
-    for i in range(len(magnitude) - PREAMBLE_SAMPLES):
-        window = magnitude[i:i+PREAMBLE_SAMPLES]
-        corr = np.sum((window > 0.5).astype(int) == np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0]))
-        if corr >= 14:
+def detect_preambles(iq, threshold=0.5): 
+    magnitude = np.abs(iq) # Compute magnitude
+    magnitude = (magnitude - np.min(magnitude)) / (np.max(magnitude) - np.min(magnitude)) # Normalize to [0,1]
+    print("length of magnitude array: ", len(magnitude))
+    preambles = [] # List to hold preamble positions
+
+    for i in range(len(magnitude) - PREAMBLE_SAMPLES): 
+        window = magnitude[i:i+PREAMBLE_SAMPLES] # 16-sample window
+        # Preamble pattern: 1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0
+
+        # to optimise: right now, all indexes are being checked, can skip ahead by 16+(112*2) after finding a preamble
+        
+        # print("checking index:", i)
+        # print("current window being checked for preamble:", window)
+        
+        corr = np.sum((window > 0.5).astype(int) == np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0])) # Correlation score
+        if corr >= 14: # At least 14/16 matches
+            print("detected preambles are at index:", i)
+            print("detected preamble window:", window)
+            
             preambles.append(i)
     return preambles
 
@@ -41,29 +55,72 @@ preamble_positions = detect_preambles(iq)
 print(f"Detected {len(preamble_positions)} preambles")
 
 # ----------------------
-# ----------------------
-# Step 4: Extract 112-bit messages with robust bit sampling
-# ----------------------
+
 # ----------------------
 # Step 4: Extract 112-bit messages with dynamic preamble shift
 # ----------------------
 BIT_SAMPLES = 2          # 2 samples per bit at 2 MHz
-PREAMBLE_SAMPLES = 16    # 16 samples per 8 µs preamble
+PREAMBLE_SAMPLES = 8 * BIT_SAMPLES    # 16 samples per 8 µs preamble
 
+# copilot note: modified extract_bits to be vectorized for performance
+# ...existing code...
+def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMBLE_SAMPLES):
+    """
+    Vectorized extraction of up to 112 bits. Returns a list of bits.
+    """
+    total_needed = preamble_samples + 112 * bit_samples
+    if start_idx + total_needed > len(iq): # prevent overflow
+        # not enough samples to extract full message
+        available_bits = (len(iq) - start_idx - preamble_samples) // bit_samples # number of bits that can be extracted
+        if available_bits <= 0: 
+            return []
+        n_bits = min(112, available_bits)
+    else:
+        n_bits = 112
+
+    start = start_idx + preamble_samples
+    
+    # use magnitude instead of real part (phase invariant)
+    block = iq[start:start + n_bits * bit_samples]
+    windows = np.abs(block).reshape(n_bits, bit_samples)  # shape (n_bits, bit_samples)
+    means = windows.mean(axis=1, dtype=np.float64)
+    # bits = (means > some_threshold).astype(int).tolist()
+    
+
+    # derive threshold from the preamble samples (data-driven)
+    preamble_slice = np.abs(iq[start_idx:start_idx + preamble_samples]) # use magnitude
+    # preamble pattern indices (1s at these sample positions)
+    pattern = np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0], dtype=bool)
+    try:
+        pulse_mean = preamble_slice[pattern].mean() # mean of pulse positions
+        noise_mean = preamble_slice[~pattern].mean() # mean of noise positions
+        some_threshold = 0.5 * (pulse_mean + noise_mean) # midpoint threshold
+    except Exception:
+        # fallback if preamble missing or degenerate
+        some_threshold = np.median(means)  # or use fixed 0.5 if you normalized earlier
+
+    bits = (means > some_threshold).astype(int).tolist()
+    
+    return bits
+
+# ...existing code...
+
+''' # chatgpt original
 def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMBLE_SAMPLES):
     """
     Extract 112-bit ADS-B message starting from preamble index.
     Returns a list of 112 bits.
     """
-    bits = []
-    for i in range(112):
-        idx_start = start_idx + preamble_samples + i * bit_samples
-        idx_end = idx_start + bit_samples
-        if idx_end > len(iq):
+    bits = []  # List to hold extracted bits
+    for i in range(112): # 112 bits
+        idx_start = start_idx + preamble_samples + i * bit_samples # start of bit interval; jumps by 2 indices with each value in i
+        idx_end = idx_start + bit_samples # end of bit interval
+        if idx_end > len(iq): # prevent overflow
             break
         avg = np.mean(np.real(iq[idx_start:idx_end]))  # average over bit interval
         bits.append(1 if avg > 0 else 0)
     return bits
+'''
 
 def bits_to_hex(bits):
     """
@@ -156,7 +213,7 @@ for idx in preamble_positions:
             messages_list.append(row)
 
     except Exception:
-        continue
+        continue 
 
 # ----------------------
 # Step 6: DataFrame & summary

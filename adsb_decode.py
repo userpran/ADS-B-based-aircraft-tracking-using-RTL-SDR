@@ -1,212 +1,176 @@
+# ----------------------
+# ADS-B Python Decoder with dynamic CPR pairing
+# ----------------------
 import numpy as np
-from math import floor, cos, acos, pi
+import pyModeS as pms
+import pandas as pd
+import os
 
+# ----------------------
+# Step 1: Input/output files
+# ----------------------
+input_file = "flight_20251016_03.bin"  # raw IQ samples at 2 MHz
+output_csv = "decoded_summary.csv"
 
-# -------------------------
-# 1. Read IQ samples
-# -------------------------
-def read_iq(filename, fs=2_400_000):
-    raw = np.fromfile(filename, dtype=np.uint8)
-    # Convert to float centered at zero
-    # Raw is 0..255; subtract midpoint to make it signed
-    raw = raw.astype(np.float32) - 127.5
-    I = raw[0::2]
-    Q = raw[1::2]
-    samples = I + 1j * Q
-    return samples, fs
+if not os.path.isfile(input_file):
+    raise FileNotFoundError(f"Input file '{input_file}' not found.")
 
-# -------------------------
-# 2. Magnitude stream
-# -------------------------
-def get_magnitude(samples):
-    return np.abs(samples)
+# ----------------------
+# Step 2: Read raw IQ samples
+# ----------------------
+raw = np.fromfile(input_file, dtype=np.int8)
+iq = raw.astype(np.float32).view(np.complex64)
+print(f"Total IQ samples read: {len(iq)}")
 
-# -------------------------
-# 3. Preamble detection
-#    (simplified version)
-# -------------------------
-def detect_preambles(mag, fs):
-    sps = fs / 1_0e6  # samples per microsecond
-    # We'll require some window; subtract some margin so we don't run off
-    window = int(8 * sps + 10)  # 8 µs preamble + small slack
-    positions = []
-    N = len(mag)
-    for i in range(N - window):
-        # Check for energy peaks roughly at 0, 0.5, 1.0, 3.5 µs
-        # You might implement a matched filter here; we do crude checks:
-        p0 = mag[i]
-        p1 = mag[i + int(0.5 * sps)]
-        p2 = mag[i + int(1.0 * sps)]
-        p3 = mag[i + int(3.5 * sps)]
-        # use threshold heuristic
-        if p0 > 2 and p1 > 2 and p2 > 2 and p3 > 2:
-            # assume message data starts just after the 8 µs preamble
-            start = i + int(8 * sps)
-            positions.append(start)
-    return positions
+# ----------------------
+# Step 3: Preamble detection (2 MHz)
+# ----------------------
+PREAMBLE_SAMPLES = 16  # 8 µs at 2 MHz
+def detect_preambles(iq, threshold=0.5):
+    magnitude = np.abs(iq)
+    magnitude = (magnitude - np.min(magnitude)) / (np.max(magnitude) - np.min(magnitude))
+    preambles = []
+    for i in range(len(magnitude) - PREAMBLE_SAMPLES):
+        window = magnitude[i:i+PREAMBLE_SAMPLES]
+        corr = np.sum((window > 0.5).astype(int) == np.array([1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0]))
+        if corr >= 14:
+            preambles.append(i)
+    return preambles
 
-# -------------------------
-# 4. Demodulate bits via PPM
-# -------------------------
-def demodulate_bits(mag, start, fs):
-    sps = fs / 1e6
+preamble_positions = detect_preambles(iq)
+print(f"Detected {len(preamble_positions)} preambles")
+
+# ----------------------
+# ----------------------
+# Step 4: Extract 112-bit messages with robust bit sampling
+# ----------------------
+# ----------------------
+# Step 4: Extract 112-bit messages with dynamic preamble shift
+# ----------------------
+BIT_SAMPLES = 2          # 2 samples per bit at 2 MHz
+PREAMBLE_SAMPLES = 16    # 16 samples per 8 µs preamble
+
+def extract_bits(iq, start_idx, bit_samples=BIT_SAMPLES, preamble_samples=PREAMBLE_SAMPLES):
+    """
+    Extract 112-bit ADS-B message starting from preamble index.
+    Returns a list of 112 bits.
+    """
     bits = []
-    for b in range(112):
-        pos = int(start + b * sps)
-        # split into two halves
-        half = int(sps / 2)
-        e1 = np.sum(mag[pos : pos + half])
-        e2 = np.sum(mag[pos + half : pos + 2 * half])
-        bits.append(1 if e1 > e2 else 0)
+    for i in range(112):
+        idx_start = start_idx + preamble_samples + i * bit_samples
+        idx_end = idx_start + bit_samples
+        if idx_end > len(iq):
+            break
+        avg = np.mean(np.real(iq[idx_start:idx_end]))  # average over bit interval
+        bits.append(1 if avg > 0 else 0)
     return bits
 
-# -------------------------
-# 5. Utility: bits → integer
-# -------------------------
-def bits_to_int(bits, i, length):
-    val = 0
-    for j in bits[i : i + length]:
-        val = (val << 1) | j
-    return val
-
-# -------------------------
-# 6. Altitude decoding (per mode-s spec)
-# -------------------------
-def decode_altitude(bits, type_code):
-    
+def bits_to_hex(bits):
     """
-    Decode the 12-bit altitude field (bits 41–52 of ME).
-    Returns (altitude_value, source_string).
-    source_string is 'Barometric' or 'GNSS'.
+    Convert list of bits to hex string for pyModeS.
     """
-    alt_bits = bits_to_int(bits, 40, 12)  # 41–52 in spec (1-based)
-    q = (alt_bits >> 4) & 1  # Q-bit (8th bit of the 12-bit field)
+    s = ''.join(str(b) for b in bits)
+    return '{:028X}'.format(int(s, 2))
 
-    top = (alt_bits >> 5) << 4   # bits above Q
-    bottom = alt_bits & 0xF      # 4 LSBs
-    N = top | bottom             # 11-bit integer (without Q)
-
-    if 9 <= type_code <= 18:
-        # Barometric altitude
-        if q == 1:
-            return N * 25 - 1000, "Barometric"
-        else:
-            # Q=0 → Gray-code 100 ft steps (rare)
-            return None, "Barometric (Gray-code, unsupported)"
-    elif 20 <= type_code <= 22:
-        # GNSS altitude (in meters)
-        return N, "GNSS"
-    else:
-        return None, "Not an altitude frame"
-
-
-
-# -------------------------
-# 7. CPR decode global (per mode-s formulas)
-# -------------------------
-N_Z = 15  # number of latitude zones per hemisphere
-
-def NL(lat):
-    # Implementation of NL(lat) per spec
-    if lat < 0:
-        lat = -lat
-    if lat >= 87:
-        return 1
-    if lat <= 0:
-        return 59
-    # compute using formula:
-    a = 1 - cos(pi / (2 * N_Z))
-    b = cos(pi / 180.0 * lat) ** 2
-    val = 2 * pi / acos(1 - a / b)
-    return int(floor(val))
-
-def cpr_global(lat_even_cpr, lat_odd_cpr, lon_even_cpr, lon_odd_cpr, t_even, t_odd):
-    # convert to fractions
-    dlat_even = 360.0 / (4 * N_Z)
-    dlat_odd  = 360.0 / (4 * N_Z - 1)
-    j = floor(59 * lat_even_cpr - 60 * lat_odd_cpr + 0.5)
-    lat_even = dlat_even * ( (j % 60) + lat_even_cpr )
-    lat_odd  = dlat_odd  * ( (j % 59) + lat_odd_cpr )
-    # choose more recent
-    lat = lat_even if t_even >= t_odd else lat_odd
-
-    # NL check
-    nl = NL(lat)
-    if nl == 0:
-        return None, None  # cannot decode
-
-    # longitude index m
-    # per spec:  
-    m = floor( lon_even_cpr * (nl - 1) - lon_odd_cpr * nl + 0.5 )
-    # compute zone sizes
-    ni_even = nl
-    ni_odd  = nl - 1
-    dlon_even = 360.0 / ni_even
-    dlon_odd  = 360.0 / ni_odd if ni_odd > 0 else 360.0
-    lon_even = dlon_even * ( (m % ni_even) + lon_even_cpr )
-    lon_odd  = dlon_odd * ( (m % ni_odd) + lon_odd_cpr ) if ni_odd > 0 else lon_even
-    lon = lon_even if t_even >= t_odd else lon_odd
-
-    # adjust longitude to −180..+180
-    if lon >= 180:
-        lon -= 360
-    return lat, lon
-
-# -------------------------
-# 8. Main loop
-# -------------------------
-def process_iq(filename):
-    samples, fs = read_iq(filename)
-    mag = get_magnitude(samples)
-    starts = detect_preambles(mag, fs)
-    cpr_store = {}  # store per ICAO: { odd/even: (lat_cpr, lon_cpr, time) }
-
-    for s in starts:
-        bits = demodulate_bits(mag, s, fs)
-        df = bits_to_int(bits, 0, 5)
-        if df != 17:
+def extract_valid_hex(iq, preamble_idx, shift_range=(-2,3)):
+    """
+    Try multiple preamble shifts to get valid CRC.
+    Returns first valid hex message or None if all fail.
+    """
+    for shift in range(*shift_range):
+        bits = extract_bits(iq, preamble_idx + shift)
+        if len(bits) != 112:
             continue
-        type_code = bits_to_int(bits, 32, 5)
-        # Altitude decode
-        alt, alt_type = decode_altitude(bits, type_code)
+        hex_msg = bits_to_hex(bits)
+        # CRC check for DF17 only
+        if pms.df(hex_msg) == 17 and pms.crc(hex_msg) is not None:
+            return hex_msg
+    return None
 
 
+# ----------------------
+# Step 5: Decode messages with dynamic even/odd CPR
+# ----------------------
+messages_list = []
+aircraft_state = {}  # ICAO -> last even/odd DF17 messages
 
-        # bit 53 (0-based) is T field, bit 54 is F flag (odd/even) per spec
-        t_bit = bits[53]
-        f_flag = bits[54]
-        lat_bits = bits_to_int(bits, 55, 17)
-        lon_bits = bits_to_int(bits, 72, 17)
+for idx in preamble_positions:
+    bits = extract_bits(iq, idx)
+    if len(bits) != 112:
+        continue
+    hex_msg = bits_to_hex(bits)
 
-        # convert to CPR fractions
-        lat_cpr = lat_bits / (2**17)
-        lon_cpr = lon_bits / (2**17)
+    try:
+        if pms.df(hex_msg) != 17:
+            continue
 
-        # Here, we skip ICAO tracking, assume one aircraft
-        if f_flag not in cpr_store:
-            cpr_store[f_flag] = (lat_cpr, lon_cpr, t_bit)
-        else:
-            # we already have the other frame, try decode
-            # pick the pair (even, odd)
-            if 0 in cpr_store and 1 in cpr_store:
-                lat, lon = cpr_global(
-                    cpr_store[0][0], cpr_store[1][0],
-                    cpr_store[0][1], cpr_store[1][1],
-                    cpr_store[0][2], cpr_store[1][2]) 
- 
+        # CRC check
+        if pms.crc(hex_msg) is None:
+            continue
+
+        icao = pms.icao(hex_msg)
+        type_code = pms.typecode(hex_msg)
+
+        if icao not in aircraft_state:
+            aircraft_state[icao] = {"even": None, "odd": None}
+
+        row = {"Hex": icao, "Flight": "", "Altitude": "", "Speed": "",
+               "Lat": "", "Lon": "", "Track": ""}
+
+        # Callsign
+        if type_code in range(1,5):
+            callsign = pms.callsign(hex_msg)
+            if callsign:
+                row["Flight"] = callsign.strip()
+
+        # Altitude / Position
+        if type_code >= 9 and type_code <= 18:
+            alt = pms.altitude(hex_msg)
+            if alt is not None:
+                row["Altitude"] = alt
+
+            oe = pms.oe_flag(hex_msg)
+            if oe == 0:
+                aircraft_state[icao]["even"] = hex_msg
+            else:
+                aircraft_state[icao]["odd"] = hex_msg
+
+            even_msg = aircraft_state[icao]["even"]
+            odd_msg = aircraft_state[icao]["odd"]
+            if even_msg and odd_msg:
+                lat, lon = pms.position(even_msg, odd_msg)
                 if lat is not None and lon is not None:
-                   print(f"Decoded position: lat={lat:.6f}, lon={lon:.6f}, Altitude={alt} ({alt_type})")
-                else:
-                   print("CPR decode failed")
-                           
-                 
+                    row["Lat"] = lat
+                    row["Lon"] = lon
 
-    
+        # Velocity / Track
+        if type_code >= 19 and type_code <= 27:
+            speed = pms.airspeed(hex_msg)
+            heading = pms.heading(hex_msg)
+            if speed is not None:
+                row["Speed"] = speed
+            if heading is not None:
+                row["Track"] = heading
 
+        if any([row["Flight"], row["Altitude"], row["Speed"], row["Lat"], row["Lon"], row["Track"]]):
+            messages_list.append(row)
 
+    except Exception:
+        continue
 
-    print("Done.")
+# ----------------------
+# Step 6: DataFrame & summary
+# ----------------------
+df_summary = pd.DataFrame(messages_list)
+if not df_summary.empty:
+    df_summary["Messages Seen"] = df_summary.groupby("Hex")["Hex"].transform("count")
+    df_summary = df_summary.sort_values(by="Messages Seen", ascending=False)
 
-
-if __name__ == "__main__":
-    process_iq("flight_20251016_03.bin")
+# ----------------------
+# Step 7: Save CSV and print
+# ----------------------
+df_summary.to_csv(output_csv, index=False)
+print(f"Summary saved to {output_csv}")
+print(df_summary)
+print(f"Total valid messages: {len(df_summary)}")
+print("Sampling rate set to 2 MHz (for SDR acquisition).")

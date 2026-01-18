@@ -2,6 +2,9 @@
 *.bin
 *.dat
 
+# directories
+iq_samples/
+
 # Output folders
 output/
 

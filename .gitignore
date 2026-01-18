@@ -1,0 +1,12 @@
+# Binary capture files
+*.bin
+*.dat
+
+# Output folders
+output/
+
+# Python
+__pycache__/
+
+# Logs
+*.log

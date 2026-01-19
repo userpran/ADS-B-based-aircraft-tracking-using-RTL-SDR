@@ -4,10 +4,10 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 
 ## Features
 
+- **Antenna Tracking**: Real-time calculation of Azimuth and Elevation to point an antenna at a target aircraft.
 - **Data Capture**: High-speed IQ sample capture (2 MHz) centered at 1090 MHz using `librtlsdr`.
 - **Decoding**: Custom implementation for Mode S preamble detection and message decoding.
-- **Integration**: Leverages `pyModeS` for robust packet parsing (DF17/ADS-B).
-- **Analysis**: Tools to verify decoder accuracy and compare results against reference decoders.
+- **Integration**: Modular design with `position_provider`, `antenna_controller`, and `decode_module`.
 - **Visualization**: Generate plots comparing Latitude, Longitude, and Altitude data.
 
 ## Prerequisites
@@ -15,16 +15,12 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 ### Hardware
 - RTL-SDR Dongle (e.g., RTL-SDR Blog V3/V4)
 - Antenna optimized for 1090 MHz (ADS-B frequency)
+- Pan/Tilt Antenna Mount (for tracking)
 
 ### Software
 - **C++ Compiler**: `g++`, `clang`, or MSVC (for building the capture tool)
 - **librtlsdr**: Driver library for RTL-SDR
-- **Python 3.x**
-- **Python Libraries**:
-  - `numpy`
-  - `pandas`
-  - `matplotlib`
-  - `pyModeS`
+- **Python 3.x**: Core logic and controller.
 
 ## Installation
 
@@ -47,43 +43,36 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 
 ## Usage
 
-### 1. Capture ADS-B Signal
-Run the compiled capture tool to record raw IQ samples.
-```bash
-./capture
-```
-*Note: The tool captures 5 seconds of data by default. This creates a file named `iq_samples_YYYYMMDD_HHMMSS_XXX.bin`.*
+### 1. Capture & Track
+The system is designed to capture ADS-B signals and drive the antenna tracking mechanism.
 
-### 2. Decode Signals
-Open `adsb_decode_2.py` and update the `input_file` variable to point to your captured binary file:
-```python
-# In adsb_decode_2.py
-input_file = "iq_samples_20251016_200629_123.bin"  # <--- Update this filename
+```bash
+python main.py
 ```
-Then run the decoder:
+
+### 2. Decode Signals (Standalone)
+To decode captured binary files manually:
 ```bash
 python adsb_decode_2.py
 ```
-This produces `decoded_summary_2.csv` containing detected aircraft info (ICAO, Call Sign, Lat, Lon, Alt).
+This produces `decoded_summary_2.csv` containing detected aircraft info.
 
-### 3. Visualize & Verify
-Use the tools in `src/decode_module/` to analyze results.
-
-To verify frames and plot comparisons:
-1. Open `src/decode_module/visualize_comparison.py`.
-2. Update `FRAME_FILE` and `CSV_FILE` configurations to point to your data.
-3. Run the visualization:
-   ```bash
-   python src/decode_module/visualize_comparison.py
-   ```
-   Output graphs will be saved to the `graphs_out/` directory.
+### 3. Verification & Visualization
+Use the tools in `src/decode_module/` to analyze decoder performance:
+- `adsb_decoder.py`: Alternative decoder implementation.
+- `visualize_comparison.py`: Compare decoder outputs.
 
 ## Project Structure
 
-- **`rtlsdr_rec_2.cpp`**: Main C++ program for capturing raw IQ data from RTL-SDR.
-- **`adsb_decode_2.py`**: Main Python script for detecting and decoding ADS-B messages.
-- **`src/decode_module/`**:
-    - **`visualize_comparison.py`**: Generates comparison plots (Custom vs pyModeS).
-    - **`verify_frames.py`**: Helper script to verify frame integrity.
-    - **`adsb_decoder.py`**: Alternative/Legacy decoder implementation.
-- **`reference_commands.txt`**: Reference commands for using `dump1090`.
+- **Core Components**:
+  - `main.py`: Main application entry point.
+  - `src/antenna_controller.py`: Controls the antenna position (Azimuth/Elevation).
+  - `src/position_provider.py`: Supplies target aircraft coordinates.
+
+- **Capture & Decode**:
+  - `rtlsdr_rec_2.cpp`: C++ IQ data recorder.
+  - `adsb_decode_2.py`: Offline decoder script.
+  - `src/decode_module/`: 
+    - `adsb_decoder.py`: Modular decoder functionality.
+    - `verify_frames.py`: Frame integrity check.
+    - `visualize_comparison.py`: Performance visualization.

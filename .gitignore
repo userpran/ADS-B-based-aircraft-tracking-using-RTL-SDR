@@ -4,6 +4,8 @@
 
 # directories
 iq_samples/
+.vscode/
+ignore_files/
 
 # Output folders
 output/

@@ -11,9 +11,8 @@ import csv
 import re
 from datetime import datetime
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+# import matplotlib.dates as mdates
 
-# Try to import pyModeS
 try:
     import pyModeS as pms
     PYMODES_AVAILABLE = True
@@ -22,7 +21,6 @@ except ImportError:
     print("Error: pyModeS not installed. Install with: pip install pyModeS")
     sys.exit(1)
 
-# Import parse_frame_file from verify_frames
 try:
     from verify_frames import parse_frame_file
 except ImportError:
@@ -173,46 +171,47 @@ def create_comparison_plots(csv_data, pymodes_data, output_path):
         y_center = (y_min + y_max) / 2
         ax1.set_ylim(y_center - y_range/2, y_center + y_range/2)
 
+    """
+    # Plot 2: Altitude vs Latitude
+    ax2 = axes[0, 1]
+    if csv_valid:
+        ax2.plot([p['lat'] for p in csv_valid], [p['alt'] for p in csv_valid], 
+                'b-o', label='adsb_decoder (custom)', markersize=4, linewidth=1.5)
+        # Add value labels for CSV data
+        for p in csv_valid:
+            ax2.annotate(f'{p["alt"]:.2f}', 
+                        (p['lat'], p['alt']), 
+                        textcoords="offset points", 
+                        xytext=(0,5), 
+                        ha='center', 
+                        fontsize=7, 
+                        color='blue')
+    if pymodes_valid:
+        ax2.plot([p['lat'] for p in pymodes_valid], [p['alt'] for p in pymodes_valid], 
+                'r--s', label='pyModeS', markersize=4, linewidth=1.5, alpha=0.7)
+        # Add value labels for pyModeS data
+        for p in pymodes_valid:
+            ax2.annotate(f'{p["alt"]:.2f}', 
+                        (p['lat'], p['alt']), 
+                        textcoords="offset points", 
+                        xytext=(0,5), 
+                        ha='right', 
+                        fontsize=7, 
+                        color='red')
 
-    # # Plot 2: Altitude vs Latitude
-    # ax2 = axes[0, 1]
-    # if csv_valid:
-    #     ax2.plot([p['lat'] for p in csv_valid], [p['alt'] for p in csv_valid], 
-    #             'b-o', label='adsb_decoder (custom)', markersize=4, linewidth=1.5)
-    #     # Add value labels for CSV data
-    #     for p in csv_valid:
-    #         ax2.annotate(f'{p["alt"]:.2f}', 
-    #                     (p['lat'], p['alt']), 
-    #                     textcoords="offset points", 
-    #                     xytext=(0,5), 
-    #                     ha='center', 
-    #                     fontsize=7, 
-    #                     color='blue')
-    # if pymodes_valid:
-    #     ax2.plot([p['lat'] for p in pymodes_valid], [p['alt'] for p in pymodes_valid], 
-    #             'r--s', label='pyModeS', markersize=4, linewidth=1.5, alpha=0.7)
-    #     # Add value labels for pyModeS data
-    #     for p in pymodes_valid:
-    #         ax2.annotate(f'{p["alt"]:.2f}', 
-    #                     (p['lat'], p['alt']), 
-    #                     textcoords="offset points", 
-    #                     xytext=(0,5), 
-    #                     ha='right', 
-    #                     fontsize=7, 
-    #                     color='red')
-
-    # ax2.set_xlabel('Latitude (degrees)')
-    # ax2.set_ylabel('Altitude (feet)')
-    # ax2.set_title('Latitude vs Altitude Comparison')
-    # ax2.legend()
-    # ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel('Latitude (degrees)')
+    ax2.set_ylabel('Altitude (feet)')
+    ax2.set_title('Latitude vs Altitude Comparison')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
     
-    # # Ensure minimum y-axis range
-    # y_min, y_max = ax2.get_ylim()
-    # y_range = 100
-    # if y_max - y_min < y_range:
-        # y_center = (y_min + y_max) / 2
-        # ax2.set_ylim(y_center - y_range/2, y_center + y_range/2)
+    # Ensure minimum y-axis range
+    y_min, y_max = ax2.get_ylim()
+    y_range = 100
+    if y_max - y_min < y_range:
+        y_center = (y_min + y_max) / 2
+        ax2.set_ylim(y_center - y_range/2, y_center + y_range/2)
+    """
 
     # Plot 2: Longitude vs Index
     ax2 = axes[0, 1]
@@ -255,38 +254,40 @@ def create_comparison_plots(csv_data, pymodes_data, output_path):
         y_center = (y_min + y_max) / 2
         ax2.set_ylim(y_center - y_range/2, y_center + y_range/2)
 
-    # # Plot 3: Altitude vs Longitude
-    # ax3 = axes[1, 0]
-    # if csv_valid:
-    #     ax3.plot([p['lon'] for p in csv_valid], [p['alt'] for p in csv_valid], 
-    #             'b-o', label='adsb_decoder (custom)', markersize=4, linewidth=1.5)
-    #     # Add value labels for CSV data
-    #     for p in csv_valid:
-    #         ax3.annotate(f'{p["alt"]}', 
-    #                     (p['index'], p['alt']), 
-    #                     textcoords="offset points", 
-    #                     xytext=(0,5), 
-    #                     ha='center', 
-    #                     fontsize=7, 
-    #                     color='blue')
-    # if pymodes_valid:
-    #     ax3.plot([p['lon'] for p in pymodes_valid], [p['alt'] for p in pymodes_valid], 
-    #             'r--s', label='pyModeS', markersize=4, linewidth=1.5, alpha=0.7)
-    #     # Add value labels for pyModeS data
-    #     for p in pymodes_valid:
-    #         ax3.annotate(f'{p["alt"]}', 
-    #                     (p['lon'], p['alt']), 
-    #                     textcoords="offset points", 
-    #                     xytext=(0,5), 
-    #                     ha='right', 
-    #                     fontsize=7, 
-    #                     color='red')
+    """
+    # Plot 3: Altitude vs Longitude
+    ax3 = axes[1, 0]
+    if csv_valid:
+        ax3.plot([p['lon'] for p in csv_valid], [p['alt'] for p in csv_valid], 
+                'b-o', label='adsb_decoder (custom)', markersize=4, linewidth=1.5)
+        # Add value labels for CSV data
+        for p in csv_valid:
+            ax3.annotate(f'{p["alt"]}', 
+                        (p['index'], p['alt']), 
+                        textcoords="offset points", 
+                        xytext=(0,5), 
+                        ha='center', 
+                        fontsize=7, 
+                        color='blue')
+    if pymodes_valid:
+        ax3.plot([p['lon'] for p in pymodes_valid], [p['alt'] for p in pymodes_valid], 
+                'r--s', label='pyModeS', markersize=4, linewidth=1.5, alpha=0.7)
+        # Add value labels for pyModeS data
+        for p in pymodes_valid:
+            ax3.annotate(f'{p["alt"]}', 
+                        (p['lon'], p['alt']), 
+                        textcoords="offset points", 
+                        xytext=(0,5), 
+                        ha='right', 
+                        fontsize=7, 
+                        color='red')
 
-    # ax3.set_xlabel('Longitude (degrees)')
-    # ax3.set_ylabel('Altitude (feet)')
-    # ax3.set_title('Longitude vs Altitude Comparison')
-    # ax3.legend()
-    # ax3.grid(True, alpha=0.3)
+    ax3.set_xlabel('Longitude (degrees)')
+    ax3.set_ylabel('Altitude (feet)')
+    ax3.set_title('Longitude vs Altitude Comparison')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    """
 
     # Plot 3: Altitude vs Index
     ax3 = axes[1, 0]

@@ -10,7 +10,7 @@ import csv
 import math
 import re
 import argparse
-from collections import defaultdict
+# from collections import defaultdict
 
 try:
     import pyModeS as pms

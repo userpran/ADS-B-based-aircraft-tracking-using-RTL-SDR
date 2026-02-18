@@ -59,12 +59,12 @@ def detect_preamble(magnitude, threshold=50):
              
     Returns a list of detected start indices.
     """
-    # Simple sliding window or hardcoded check
+    # Simple sliding window
     # Preamble at 2Msps: 
     # [1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0] <-- 8us is 16 samples
     # Actually the pulses are 0.5us wide. At 2Msps, 1 sample = 0.5us.
     # So pulses are roughly 1 sample wide.
-    # Pattern indices: 0 (High), 2 (High), 7 (High), 9 (High) - wait, let's verify specs.
+    # Pattern indices: 0 (High), 2 (High), 7 (High), 9 (High)
     # Mode S Preamble:
     # Pulse 1: 0.0 - 0.5 us
     # Pulse 2: 1.0 - 1.5 us
@@ -82,17 +82,13 @@ def detect_preamble(magnitude, threshold=50):
     # Sample 7: High
     # Sample 8: Low
     # Sample 9: High
-    # Sample 10-15: Low (part of 8us preamble? No, preamble is 8us total)
+    # Sample 10-15: Low
     
-    # We will look for peaks at indices 0, 2, 7, 9 relative to start.
-    # Simple logic: signal[0] > thresh, signal[2] > thresh, etc.
-    # And noise in between should be low.
-    
+    # Look for peaks at indices 0, 2, 7, 9 relative to start.  
     detected_indices = []
     msg_len = len(magnitude)
     
-    # Pre-compute threshold based on average noise if needed, but fixed is okay for now
-    # or dynamic thresholding.
+    # Fixed threshold based on average noise
     
     i = 0
     while i < msg_len - (112 * 2 + 16): # 112 bits * 2 samples/bit + preamble
@@ -106,8 +102,6 @@ def detect_preamble(magnitude, threshold=50):
                 
                 # Check quiet zones (optional but good for false positives)
                 # indices 1, 3, 4, 5, 6, 8
-                # We can be lenient or strict. Let's be minimal first.
-                
                 detected_indices.append(i)
                 i += FRAME_LEN_SAMPLES # skip valid frame len to avoid re-detecting same packet
                 continue
@@ -139,21 +133,10 @@ def decode_bits(magnitude, start_idx):
             bits.append(1)
         elif sample1 < sample2: # Pulse in second half
             bits.append(0)
-        else:
-            # If equal, ambiguous. Usually means weak signal.
-            # Default to 0 or check previous confidence?
-            bits.append(0) # Simple fallback
+        else: # fallback
+            bits.append(0)
             
     return bits
-
-def bits_to_bytes(bits):
-    bytes_data = []
-    for i in range(0, len(bits), 8):
-        byte_val = 0
-        for b in bits[i:i+8]:
-            byte_val = (byte_val << 1) | b
-        bytes_data.append(byte_val)
-    return bytes_data
 
 def bits_to_hex_str(bits):
     hex_str = ""
@@ -169,36 +152,15 @@ def check_crc(bits):
     Performs CRC check for Mode S.
     Returns True if CRC matches (syndrome is 0).
     """
-    # Polynomial: 0xFFFA0480 (24 bits) + implicit leading 1 -> 25 bits?
-    # Actually Mode S uses a 24-bit CRC appended to data. 
-    # The calculation covers the first 88 bits for DF17.
-    # We can just run the polynomial over the whole detector bits (112)
-    # The remainder should be 0 if the checksum is correct 
-    # (assuming no parity overlay like DF11).
-    # For DF17 (ADS-B), the PI field is the parity, so syndrome should be 0.
-    
-    poly = 0xFFFA0480
+    poly = 0xFFFA0480 # Polynomial: 0xFFFA0480 (24 bits)
     data = 0
     
     # Convert bits to a large integer
     for b in bits:
         data = (data << 1) | b
         
-    # We only have 112 bits. The CRC logic is usually:
-    # Generator is 25 bits long (coeff 1 + 24 bits).
-    # We assume 'data' contains the checksum at the end.
-    
-    # Standard CRC algorithm for Mode S
-    # Based on pyModeS or similar reference
-    
-    # Working with hex or byte array is easier often, but bitwise is fine.
-    # Let's use a known efficient implementation.
-    
-    msg_bits = bits[:] # copy
-    
-    # Generator polynomial G(x) = x^24 + x^23 + x^22 + x^21 + x^20 + ... + 1
-    # Hex: FFF409 (Wait, poly varies? No, standard is 0xFFFA0480)
-    # Correct Poly: 0xFFFA0480
+    # Standard CRC algorithm for Mode S (Based on pyModeS)
+    msg_bits = bits[:]
     
     # Calculate CRC
     rem = 0
@@ -211,67 +173,6 @@ def check_crc(bits):
             rem = rem ^ (poly | 0x1000000) # XOR with Poly (implicit leading 1)
             
     return (rem & 0xFFFFFF) == 0
-
-def decode_cpr(lat_enc, lon_enc, cpr_format, is_odd):
-    # This involves complex CPR logic (airborne vs surface).
-    # For this snippet, we will implement a simplified Airborne CPR.
-    # Reference: ICAO Annex 10 Vol 4
-    
-    # Constants
-    NZ = 15
-    d_lat_even = 360.0 / (4.0 * NZ)
-    d_lat_odd = 360.0 / (4.0 * NZ - 1.0)
-    
-    # Decode logic is stateful (needs odd and even frames) for global position.
-    # HOWEVER, the prompt asks for data from *each* signal.
-    # Without a reference position or a pair of odd/even, we cannot get global position accurately.
-    # Wait, getting single frame position requires a "reference" location.
-    
-    # If we find both odd and even frames for the same aircraft, we can decode global.
-    # Let's attempt to store fragments?
-    # Or just output the raw CPR and note that global decode needs pairs.
-    # BUT the user asked for lat/lon. I should try to global decode if I see pairs.
-    
-    return None # Placeholder
-
-def simple_decode_adsb(hex_msg):
-    """
-    Decodes DF17 messages.
-    """
-    # Downlink Format (first 5 bits)
-    df = int(hex_msg[:2], 16) >> 3
-    if df != 17:
-        return None
-        
-    # Capability (3 bits) - CA
-    # ICAO (24 bits) - next 6 chars
-    icao = hex_msg[2:8]
-    
-    # Data (56 bits -> 14 chars)
-    data = hex_msg[8:22]
-    
-    # Type Code (first 5 bits of data)
-    type_code = int(data[:2], 16) >> 3
-    
-    result = {
-        "icao": icao,
-        "type_code": type_code,
-        "payload": data
-    }
-    
-    # Decode Altitude (Type Codes 9-18)
-    if 9 <= type_code <= 18:
-        # Structure: ...
-        # Can rely on common logic
-        pass
-        
-    # Decode Position (Type Codes 9-18 Airborne Position)
-    # Need to distinguish.
-    
-    return result
-
-# --- Minimal standalone CPR Decoder from scratch ---
-# Simplified for 1 file run
 aircraft_messsages = {} # ICAO -> { 'even': (t, lat, lon), 'odd': (t, lat, lon) }
 
 def cpr_decode(even_msg, odd_msg):
@@ -279,8 +180,7 @@ def cpr_decode(even_msg, odd_msg):
     Decodes global position from Even and Odd CPR messages.
     even_msg/odd_msg: (lat_enc, lon_enc) tuples (17 bits each)
     """
-    # 131072 = 2^17
-    MAX_VAL = 131072.0
+    MAX_VAL = 131072.0 # 2^17
     
     lat_even_enc, lon_even_enc = even_msg
     lat_odd_enc, lon_odd_enc = odd_msg
@@ -297,12 +197,11 @@ def cpr_decode(even_msg, odd_msg):
     lat_even = d_lat_even * (j % 60 + cpr_lat_even)
     lat_odd = d_lat_odd * (j % 59 + cpr_lat_odd)
     
-    # Adjust to Southern hemisphere if needed
+    # Adjust to Southern hemisphere
     if lat_even >= 270: lat_even -= 360
     if lat_odd >= 270: lat_odd -= 360
     
     # Check consistency
-    # (Just pick Even for final lat if valid)
     final_lat = lat_even
     
     # Longitude
@@ -323,10 +222,6 @@ def cpr_decode(even_msg, odd_msg):
     nl_lat = nl(final_lat)
     
     d_lon = 360.0 / max(nl_lat, 1) # if even
-    # Actually depends on even/odd frame usage.
-    # If using even frame for Lat, use even logic for Lon?
-    # Usually we use the frame with the latest timestamp.
-    # Let's assume Even is recent.
     
     d_lon_even = 360.0 / max(nl_lat, 1)
     d_lon_odd = 360.0 / max(nl_lat - 1, 1)
@@ -368,12 +263,12 @@ def parse_df17(hex_msg, detected_signals):
             # Bit 40-51 -> Altitude
             
             # Extract altitude
-            # Q bit is bit 47 (index 47-32 = 15 inside data?); decides if altitude is in 25ft or 100ft steps
+            # Q bit is bit 47: decides if altitude is in 25ft or 100ft steps
             # data is 56 bits. 
             # TC: 5 bits (0-4)
             # SS: 2 bits (5-6)
             # SAF: 1 bit (7)
-            # ALT: 12 bits (8-19) -> Wait, layout varies.
+            # ALT: 12 bits (8-19)
             
             # Standard DF17 Airborne Pos: 
             # TC: 5 bits (0-4)
@@ -396,7 +291,7 @@ def parse_df17(hex_msg, detected_signals):
             altitude = 0
             if q_bit == '1':
                 altitude = val * 25 - 1000
-            # If Q=0, 100ft steps. Gillham code?
+            # If Q=0, 100ft steps
             else:
                 altitude = val * 100 - 1000 # Approximation
             
@@ -413,7 +308,7 @@ def parse_df17(hex_msg, detected_signals):
             else:
                 aircraft_messsages[icao]['odd'] = (lat_enc, lon_enc) # Store odd CPR message
 
-            # Try to decode CPR message
+            # Decode CPR message
             lat, lon = 0.0, 0.0
             if 'even' in aircraft_messsages[icao] and 'odd' in aircraft_messsages[icao]:
                 res = cpr_decode(aircraft_messsages[icao]['even'], aircraft_messsages[icao]['odd']) # Decoded CPR message (lat, lon)
@@ -447,9 +342,7 @@ def process_signals(magnitude, threshold):
         if not bits:
             continue
 
-        # Note: CRC check is skipped for now.
-        # To enable, use: 
-        # if not check_crc(bits): continue
+        # if not check_crc(bits): continue # CRC check is skipped for now 
 
         hex_msg = bits_to_hex_str(bits)
         # print(f"DEBUG: Valid CRC at {idx}: {hex_msg}")
@@ -469,10 +362,10 @@ def display_signals(valid_signals):
     # to process each position
     for sig in valid_signals: # to take each signal from valid_signals
         icao_str = sig['icao'] 
-        alt_str = str(sig['alt']) #
+        alt_str = str(sig['alt'])
         if sig['lat'] != 0.0:
             lat_str = str(sig['lat']) # to obtain latitude
-            lon_str = str(sig['lon']) # 
+            lon_str = str(sig['lon'])
         else:
             lat_str = "Partial"
             lon_str = "Partial"
@@ -485,9 +378,9 @@ def save_output(valid_signals, arg_filename, date_str, time_str):
     Supports both Auto-Timestamp (Option 1) and Manual/Batch Path (Option 2).
     """
     # Determine extension
-    ext = ".json"
-    if arg_filename.lower().endswith(".csv"):
-        ext = ".csv"
+    ext = ".csv"
+    if arg_filename.lower().endswith(".json"):
+        ext = ".json"
 
     # ==========================================
     # OPTION 1: Auto-Timestamp (DEFAULT)
@@ -522,18 +415,7 @@ def save_output(valid_signals, arg_filename, date_str, time_str):
     # ==========================================
 
     # Detect format by extension
-    if ext == ".csv":
-        import csv
-        with open(output_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["lat", "lon", "alt", "icao"]) # Header
-            for sig in valid_signals:
-                 # We write all entries; KML converter handles skipping partials later
-                 writer.writerow([sig['lat'], sig['lon'], sig['alt'], sig['icao']])
-        print(f"\nCSV output saved to {output_path}")
-
-    else:
-        # Default to JSON
+    if ext == ".json":
         import json
         json_output = []
         for sig in valid_signals:
@@ -545,7 +427,6 @@ def save_output(valid_signals, arg_filename, date_str, time_str):
             }
             json_output.append(entry)
 
-        # Custom compact writing: one object per line for better readability
         with open(output_path, 'w') as f:
             f.write("[\n")
             lines = []
@@ -556,6 +437,16 @@ def save_output(valid_signals, arg_filename, date_str, time_str):
 
         print(f"\nJSON output saved to {output_path}")
 
+    else:
+        # Default to CSV
+        import csv
+        with open(output_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["lat", "lon", "alt", "icao"]) # Header
+            for sig in valid_signals:
+                writer.writerow([sig['lat'], sig['lon'], sig['alt'], sig['icao']])
+        print(f"\nCSV output saved to {output_path}")
+        
 def main():
     # --- Input Selection ---
     # Option A: Use command line arguments (Default)

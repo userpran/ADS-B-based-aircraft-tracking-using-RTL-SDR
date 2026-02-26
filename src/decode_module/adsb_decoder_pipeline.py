@@ -553,12 +553,14 @@ def main():
 
     if not os.path.exists(filepath):
         print(f"File not found: {filepath}")
+        stop_azel_thread()  # Stop thread if exiting early
         return
 
     # --- Load Data ---
     print("Reading IQ samples...")
     magnitude = read_iq_samples(filepath)
     if magnitude is None:
+        stop_azel_thread()  # Stop thread if reading fails
         return
 
     print(f"Loaded {len(magnitude)} samples.")

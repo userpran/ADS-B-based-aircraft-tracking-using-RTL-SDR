@@ -1,3 +1,7 @@
+#to run the program, use the command:
+#python3 -m src.decode_module.adsb_decoder_pipeline src/decode_module/iq_samples_20251019_172049_619.bin .csv
+
+
 import numpy as np
 import sys
 import os

@@ -186,7 +186,7 @@ def cpr_decode(even_msg, odd_msg):
 # Local CPR decode works from a single frame using this as a reference.
 # Accuracy is good within ~200 NM of the receiver.
 # If you don't know your location, set both to None to fall back to global CPR.
-RECEIVER_LAT = 8.5241    # Thiruvananthapuram, Kerala
+RECEIVER_LAT = 8.5241    #thiruvananthapuram
 RECEIVER_LON = 76.9366
 
 def cpr_decode_local(lat_enc, lon_enc, f_flag, ref_lat, ref_lon):
@@ -370,7 +370,7 @@ def run_decode_loop(chunk_iterator):
             display_signals(signals)
             all_signals.extend(signals)
 
-        # Keep tail so frames straddling chunk boundaries are not lost
+        # Keep tail so frames crossing chunk boundaries are not lost
         carry = raw[-TAIL_BYTES:] if len(raw) > TAIL_BYTES else raw
 
     print(f"\n[ADS-B decoder] Processed {total_chunks} chunk(s).")

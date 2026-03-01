@@ -15,3 +15,12 @@ __pycache__/
 
 # Logs
 *.log
+
+# ADS-B pipeline
+rtlsdr_rec_pipeline
+captures/
+src/output/
+src/azel_module/azel_*.csv
+*.pyc
+src/**/__pycache__/
+*.pyo

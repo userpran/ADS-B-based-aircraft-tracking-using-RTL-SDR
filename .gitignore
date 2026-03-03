@@ -20,7 +20,7 @@ __pycache__/
 rtlsdr_rec_pipeline
 captures/
 src/output/
-src/azel_module/azel_*.csv
+src/azel_output/
 *.pyc
 src/**/__pycache__/
 *.pyo

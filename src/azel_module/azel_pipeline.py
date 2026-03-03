@@ -15,7 +15,7 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 # ── Arduino serial config ─────────────────────────────────────────────────────
-ARDUINO_PORT     = '/dev/ttyACM0'   # change to 'COM3' etc on Windows
+ARDUINO_PORT     = '/dev/ttyUSB0'   # can change to USB1
 ARDUINO_BAUDRATE = 115200
 
 # ── Shared queue ──────────────────────────────────────────────────────────────
@@ -29,8 +29,10 @@ gs_alt = 0   # metres, sea level
 # ── Filters ───────────────────────────────────────────────────────────────────
 MAX_ALT_FT        = 50000   # ignore impossible altitudes
 MAX_ALT_CHANGE_FT = 2000    # ignore sudden spikes
-MIN_LAT = -90;  MAX_LAT = 90
-MIN_LON = -180; MAX_LON = 180
+MIN_LAT = -90
+MAX_LAT = 90
+MIN_LON = -180
+MAX_LON = 180
 
 last_alt_ft = {}   # last altitude per ICAO for jump filtering
 running     = False
@@ -72,7 +74,20 @@ def try_open_serial():
         return None
     try:
         ser = serial.Serial(ARDUINO_PORT, ARDUINO_BAUDRATE, timeout=1)
-        time.sleep(2)   # wait for Arduino to reset after serial connect
+        time.sleep(2)   # wait for Arduino to reset after serial connect                   
+        # allow reset
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+
+        # Read startup message if Arduino printed one (if there's actually something in the buffer)— don't block if not
+        #if no startup messages, empty string will be returned, but connection is still successful
+        
+        if ser.in_waiting > 0:                     
+            ready = ser.readline().decode().strip()
+            print(f"[AzEl] Arduino says: {ready}") 
+        else:
+            print("[AzEl] Arduino connected (no startup message — already running)")
+
         print(f"[AzEl] Arduino connected on {ARDUINO_PORT} at {ARDUINO_BAUDRATE} baud.")
         return ser
     except serial.SerialException as e:
@@ -105,7 +120,8 @@ def azel_worker():
     # ── CSV setup ─────────────────────────────────────────────────────────────
     now        = datetime.now()
     module_dir = os.path.dirname(__file__)
-    filename   = os.path.join(module_dir, f"azel_{now.strftime('%m%d_%H%M')}.csv")
+    output_dir = os.path.join(module_dir, "..", "azel_output")  # src/azel_output
+    filename   = os.path.join(output_dir, f"azel_{now.strftime('%m%d_%H%M')}.csv")
     out        = open(filename, "w", newline="")
     writer     = csv.writer(out)
     writer.writerow(["time", "icao", "lat", "lon", "alt_ft",
@@ -125,6 +141,7 @@ def azel_worker():
                 continue
 
             if not valid_row(icao, lat, lon, alt_ft):
+                print(f"[AzEl] REJECTED: {icao} lat={lat} lon={lon} alt={alt_ft}")
                 continue
 
             # ── Compute az/el ─────────────────────────────────────────────────
@@ -169,9 +186,51 @@ def start_azel_thread():
     thread_ref.start()
     print("[AzEl] Thread running")
 
+    
 def stop_azel_thread():
     global running, thread_ref
     running = False
     if thread_ref is not None:
         thread_ref.join(timeout=2)
         print("[AzEl] Thread joined")
+
+if __name__ == "__main__":
+
+    # TEMPORARY MOTOR TEST — only runs when azel_pipeline.py is run as a standalone
+    # run with: python3 -m src.azel_module.azel_pipeline
+
+    start_azel_thread()
+
+    import threading as _t
+    def inject_test_data():
+        import time
+        test_positions = [
+         # Aircraft approaching from far → close overhead → receding
+         # GS is at 8.5N, 76.9E
+        ("0xTEST01", 7.0,  76.9, 5000),   
+        ("0xTEST01", 7.5,  76.9, 5000),   
+        ("0xTEST01", 8.0,  76.9, 5000),   
+        ("0xTEST01", 8.3,  76.9, 5000),   
+        ("0xTEST01", 8.45, 76.9, 5000),   
+        ("0xTEST01", 8.5,  76.9, 5000),   
+        ("0xTEST01", 8.55, 76.9, 5000),   
+        ("0xTEST01", 8.7,  76.9, 5000),   
+        ("0xTEST01", 9.0,  76.9, 5000),  
+        ("0xTEST01", 9.5,  76.9, 5000),   
+        
+]
+
+        for pos in test_positions:
+            time.sleep(3)
+            print(f"[Test] Injecting position: {pos}")
+            submit_decoded_position(*pos)
+    _t.Thread(target=inject_test_data, daemon=True).start()
+
+    
+    print("[AzEl] Running standalone test. Ctrl+C to stop.")  
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        stop_azel_thread()
+        print("[AzEl] Done.")

@@ -28,7 +28,7 @@ gs_alt = 0   # metres, sea level
 
 # ── Filters ───────────────────────────────────────────────────────────────────
 MAX_ALT_FT        = 50000   # ignore impossible altitudes
-MAX_ALT_CHANGE_FT = 2000    # ignore sudden spikes
+MAX_ALT_CHANGE_FT = 3000    # ignore sudden spikes
 MIN_LAT = -90
 MAX_LAT = 90
 MIN_LON = -180
@@ -86,7 +86,7 @@ def try_open_serial():
             ready = ser.readline().decode().strip()
             print(f"[AzEl] Arduino says: {ready}") 
         else:
-            print("[AzEl] Arduino connected (no startup message — already running)")
+            print("[AzEl] Arduino connected (no startup message - already running)")
 
         print(f"[AzEl] Arduino connected on {ARDUINO_PORT} at {ARDUINO_BAUDRATE} baud.")
         return ser
@@ -194,6 +194,30 @@ def stop_azel_thread():
         thread_ref.join(timeout=2)
         print("[AzEl] Thread joined")
 
+    # HOMING without limit switch [RESET ARDUINO BEFORE EACH RUN]
+    # Send home command to Arduino if connected - azel_worker already closed ser by now so open briefly
+    if SERIAL_AVAILABLE:
+        try:
+            ser = serial.Serial(ARDUINO_PORT, ARDUINO_BAUDRATE, timeout=3)
+            time.sleep(1)
+            ser.write(b"HOME\n")
+            print("[AzEl] Waiting for motors to return home...")
+
+            deadline = time.time() + 30  # max 30 seconds
+            while time.time() < deadline:
+                response = ser.readline().decode().strip()
+                if "Homed" in response:
+                    print("[AzEl] Motors at home position.")
+                    break
+                elif response:
+                    print(f"[AzEl] Arduino: {response}")
+            else:
+                print("[AzEl] WARNING: Homing timeout.")
+
+            ser.close()
+        except Exception as e:
+            print(f"[AzEl] Could not home Arduino: {e}")
+
 if __name__ == "__main__":
 
     # TEMPORARY MOTOR TEST — only runs when azel_pipeline.py is run as a standalone
@@ -205,18 +229,18 @@ if __name__ == "__main__":
     def inject_test_data():
         import time
         test_positions = [
-         # Aircraft approaching from far → close overhead → receding
+        
          # GS is at 8.5N, 76.9E
-        ("0xTEST01", 7.0,  76.9, 5000),   
-        ("0xTEST01", 7.5,  76.9, 5000),   
-        ("0xTEST01", 8.0,  76.9, 5000),   
-        ("0xTEST01", 8.3,  76.9, 5000),   
-        ("0xTEST01", 8.45, 76.9, 5000),   
-        ("0xTEST01", 8.5,  76.9, 5000),   
-        ("0xTEST01", 8.55, 76.9, 5000),   
-        ("0xTEST01", 8.7,  76.9, 5000),   
-        ("0xTEST01", 9.0,  76.9, 5000),  
-        ("0xTEST01", 9.5,  76.9, 5000),   
+        ("0xTEST01", 8.50,  76.70, 10000),   
+        ("0xTEST01", 8.70,  76.83, 10000),   
+        ("0xTEST01", 8.50,  77.00, 10000),   
+        ("0xTEST01", 8.3,  76.83, 10000),   
+        ("0xTEST01", 8.50, 76.70, 10000),   
+        ("0xTEST01", 8.5,  76.70, 10000),   
+        ("0xTEST01", 8.70,  76.83, 10000),   
+        ("0xTEST01", 8.50,  77.00, 10000),   
+        ("0xTEST01", 8.3,  76.83, 10000),   
+        ("0xTEST01", 8.50, 76.70, 10000) 
         
 ]
 

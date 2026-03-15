@@ -24,3 +24,6 @@ src/azel_output/
 *.pyc
 src/**/__pycache__/
 *.pyo
+
+#MacOS metadata files
+.DS_Store

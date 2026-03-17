@@ -74,15 +74,14 @@ int main() {
     std::cout << "Tuned to " << DEFAULT_FREQUENCY / 1e6 << " MHz, "
               << "Sample Rate = " << DEFAULT_SAMPLE_RATE / 1e6 << " MHz" << std::endl;
 
-
-    
+    // Create unique filename with timestamp in milliseconds
     auto now = std::chrono::system_clock::now(); // Get current time
     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>( // Get milliseconds part of current time
         now.time_since_epoch()) % 1000; //  Modulo 1000 to get milliseconds
     time_t now_t = std::chrono::system_clock::to_time_t(now); // Convert to standard time (time_t)
     struct tm *t = localtime(&now_t); // Convert to local time structure
     
-    char filename[128];   // bigger buffer for path
+    char filename[128];
     snprintf(filename, sizeof(filename),  // Format filename with date and time with milliseconds
              "captures/iq_samples_%04d%02d%02d_%02d%02d%02d_%03d.bin",
              t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,

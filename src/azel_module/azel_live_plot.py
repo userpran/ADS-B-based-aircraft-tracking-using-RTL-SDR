@@ -113,7 +113,7 @@ gs = gridspec.GridSpec(2, 2, figure=fig,
 # ── Polar sky plot (Az/El) ────────────────────────────────────────────────────
 ax_polar = fig.add_subplot(gs[:, 0], projection="polar")
 ax_polar.set_facecolor("#0d1117")
-ax_polar.set_theta_zero_location("N")   # North at top
+ax_polar.set_theta_zero_location("N")    # North at top
 ax_polar.set_theta_direction(-1)         # clockwise (compass convention)
 ax_polar.set_ylim(0, 90)                 # 0=zenith centre, 90=horizon edge
 ax_polar.set_yticks([0, 30, 60, 90])
@@ -173,7 +173,7 @@ def update(frame):
     for row in rows:
         icao = row["icao"]
         aircraft_history[icao].append((
-            np.radians(row["az_deg"]),   # polar needs radians
+            np.radians(row["az_deg"]),    # polar needs radians
             90 - row["el_deg"],           # invert: 0=zenith, 90=horizon
             row["alt_ft"],
             row["range_m"] / 1000.0,

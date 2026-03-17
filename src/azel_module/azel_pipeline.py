@@ -56,7 +56,6 @@ def valid_row(icao, lat, lon, alt_ft):
 
 # ── Called by decoder ─────────────────────────────────────────────────────────
 def submit_decoded_position(icao, lat, lon, alt_ft):
-    """Called by the ADS-B decoder immediately after CPR decode."""
     data_q.put((icao, lat, lon, alt_ft))
 
 # ── Arduino serial helper ─────────────────────────────────────────────────────
@@ -130,7 +129,6 @@ def azel_worker():
 
     # ── Serial setup (optional) ───────────────────────────────────────────────
     # try_open_serial() returns None silently if Arduino is not connected.
-    # The rest of the pipeline is completely unaffected either way.
     ser = try_open_serial()
 
     try:

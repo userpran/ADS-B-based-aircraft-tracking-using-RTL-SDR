@@ -137,7 +137,7 @@ def decode_bits_vectorised(magnitude, start_idx):
     return msg_bytes.tolist()
 
 # ── CPR Decoding ──────────────────────────────────────────────────────────────
-def _nl(lat):
+def cpr_nl(lat):
     """NL(lat) — number of longitude zones."""
     if abs(lat) >= 87.0: return 1
     if abs(lat) == 0.0:  return 59
@@ -148,7 +148,7 @@ def _nl(lat):
 def cpr_decode(even_msg, odd_msg):
     """
     Decodes global airborne position from an even + odd CPR pair.
-    Returns (lat, lon) rounded to 5dp, or None on failure.
+    Returns (lat, lon) rounded to 5 decimal places, or None on failure.
     """
     MAX      = 131072.0
     lat0_enc, lon0_enc = even_msg
@@ -164,11 +164,11 @@ def cpr_decode(even_msg, odd_msg):
     if lat0 >= 270.0: lat0 -= 360.0
     if lat1 >= 270.0: lat1 -= 360.0
 
-    if _nl(lat0) != _nl(lat1):
+    if cpr_nl(lat0) != cpr_nl(lat1):
         return None
 
     final_lat = lat0
-    nl_val    = _nl(final_lat)
+    nl_val    = cpr_nl(final_lat)
     n_even    = max(nl_val, 1)
 
     cpr_lon0 = lon0_enc / MAX
@@ -182,33 +182,30 @@ def cpr_decode(even_msg, odd_msg):
     return round(final_lat, 5), round(lon, 5)
 
 # ── Receiver reference position (for local CPR decode) ───────────────────────
-# Set this to your ground station coordinates.
-# Local CPR decode works from a single frame using this as a reference.
+# Set ground station coordinates as receriver reference position.
 # Accuracy is good within ~200 NM of the receiver.
-# If you don't know your location, set both to None to fall back to global CPR.
-RECEIVER_LAT = 8.5241    #thiruvananthapuram
+# Set both to None to fall back to global CPR.
+RECEIVER_LAT = 8.5241
 RECEIVER_LON = 76.9366
 
 def cpr_decode_local(lat_enc, lon_enc, f_flag, ref_lat, ref_lon):
     """
     Local CPR decode using receiver position as reference.
     Works on a SINGLE frame — no even+odd pair needed.
-    Accurate within ~200 NM of the receiver.
-
     f_flag: 0 = even frame, 1 = odd frame
-    Returns (lat, lon) rounded to 5dp.
+    Returns (lat, lon) rounded to 5 decimal places.
     """
-    MAX    = 131072.0
-    NZ     = 15
-    d_lat  = 360.0 / (4 * NZ) if f_flag == 0 else 360.0 / (4 * NZ - 1)
+    MAX     = 131072.0
+    NZ      = 15
+    d_lat   = (360.0 / (4 * NZ)) if (f_flag == 0) else (360.0 / (4 * NZ - 1))
     cpr_lat = lat_enc / MAX
 
-    j   = math.floor(ref_lat / d_lat) + math.floor(
+    j       = math.floor(ref_lat / d_lat) + math.floor(
               0.5 + ((ref_lat % d_lat) / d_lat) - cpr_lat)
-    lat = d_lat * (j + cpr_lat)
+    lat     = d_lat * (j + cpr_lat)
 
-    nl_lat  = _nl(lat)
-    n       = max(nl_lat, 1) if f_flag == 0 else max(nl_lat - 1, 1)
+    nl_lat  = cpr_nl(lat)
+    n       = (max(nl_lat, 1)) if (f_flag == 0) else (max(nl_lat - 1, 1))
     d_lon   = 360.0 / n
     cpr_lon = lon_enc / MAX
 
@@ -241,8 +238,8 @@ def parse_df17(msg_bytes, detected_signals):
         # alt_bits = ME bits 8-19 (12 bits): 8 from data[1], 4 from data[2] top nibble
         # q_bit    = ME bit 15 = LSB of data[1]  (NOT from data[2])
         # if Q=1: strip q_bit → n = top 7 bits shifted left 4 + bottom 4 bits
-        alt_bits = ((data[1] & 0xFF) << 4) | ((data[2] >> 4) & 0x0F)  # 12-bit field
-        q_bit    = data[1] & 0x01                                       # LSB of data[1]
+        alt_bits = ((data[1] & 0xFF) << 4) | ((data[2] >> 4) & 0x0F)   # 12-bit field
+        q_bit    = data[1] & 0x01                                      # LSB of data[1]
         if q_bit:
             n        = ((alt_bits >> 5) << 4) | (alt_bits & 0x0F)      # remove Q bit
             altitude = n * 25 - 1000
@@ -303,7 +300,7 @@ def process_signals(magnitude):
         parse_df17(msg_bytes, valid_signals)
     return valid_signals
 
-# ── IQ conversion (shared by both modes) ─────────────────────────────────────
+# ── IQ conversion ─────────────────────────────────────────────────────────────
 def iq_bytes_to_magnitude(raw_bytes):
     """Converts raw RTL-SDR IQ bytes to magnitude array."""
     iq        = np.frombuffer(raw_bytes, dtype=np.uint8).astype(np.float32) - 127.5

@@ -8,10 +8,10 @@ df = pd.read_csv("~/projects/ADS-B-based-aircraft-tracking-using-RTL-SDR/src/out
 # Convert altitude ft → meters
 df['alt_m'] = df['alt'] * 0.3048
 
-# Your antenna / receiver location (SET THIS!)
+# Your antenna / receiver location
 gs_lat = 8.5000
 gs_lon = 76.9000
-gs_alt = 10  # meters (change to your actual station height)
+gs_alt = 10  # meters (change to actual station height)
 
 # Compute azimuth/elevation for each row
 def compute_aer(row):

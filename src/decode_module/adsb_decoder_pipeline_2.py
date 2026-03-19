@@ -306,7 +306,7 @@ def iq_bytes_to_magnitude(raw_bytes):
     iq        = np.frombuffer(raw_bytes, dtype=np.uint8).astype(np.float32) - 127.5
     i_samples = iq[0::2]
     q_samples = iq[1::2]
-    return np.sqrt(i_samples ** 2 + q_samples ** 2)
+    return np.abs(i_samples) + np.abs(q_samples) #Use np.sqrt(i_samples ** 2 + q_samples ** 2) for true magnitude, but abs sum is faster and good enough for detection
 
 # ── Chunk iterators ───────────────────────────────────────────────────────────
 def iter_chunks_fifo(fifo_path):

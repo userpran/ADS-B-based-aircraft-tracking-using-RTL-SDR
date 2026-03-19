@@ -17,7 +17,7 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Linux |  Fully supported | Primary development platform |
-| macOS |  Partial | launcher.sh works, Pipe buffer resize skipped in 'rtlsdr_rec_pipeline.cpp', Arduino port name differs (`/dev/tty.usbmodem*`) |
+| macOS |  Partial | launcher.sh works, Pipe buffer resize skipped in `rtlsdr_rec_pipeline.cpp`, Arduino port name differs (`/dev/tty.usbmodem*`) |
 | Windows |  Not supported | launcher.sh requires Bash, FIFO requires Unix named pipes - would need full rewrite to PowerShell + Windows Named Pipes |
 
 > **Note**: All development and testing was done on Ubuntu Linux. The Python decoder, az/el pipeline, and visualisation scripts are platform-independent. Only `launcher.sh` and `rtlsdr_rec_pipeline.cpp` are Linux-specific.
@@ -72,7 +72,7 @@ ADS-B-based-aircraft-tracking-using-RTL-SDR/
    
    **Linux/WSL/MinGW:**
    ```bash
-   g++ rtlsdr_rec_2.cpp -o capture -lrtlsdr
+   g++ rtlsdr_rec_pipeline.cpp -o rtlsdr_rec_pipeline -lrtlsdr
    ```
 
    **Windows (MSVC):**
@@ -140,8 +140,8 @@ Edit in `cpp/rtlsdr_rec_pipeline.cpp`:
 ### Arduino Serial Port
 Edit in `src/azel_module/azel_pipeline.py`:
 ```python
-ARDUINO_PORT = '/dev/ttyUSB0'   # Linux
-# ARDUINO_PORT = 'COM3'         # Windows
+ARDUINO_PORT = '/dev/ttyUSB0'              # Linux
+# ARDUINO_PORT = 'COM3'                    # Windows
 # ARDUINO_PORT = '/dev/tty.usbmodem14201'  # macOS
 ```
 

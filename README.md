@@ -17,8 +17,8 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Linux |  Fully supported | Primary development platform |
-| macOS |  Partial | launcher.sh works, `F_SETPIPE_SZ` not supported (pipe buffer resize skipped), Arduino port name differs (`/dev/tty.usbmodem*`) |
-| Windows |  Not supported | launcher.sh requires Bash, FIFO requires Unix named pipes — would need full rewrite to PowerShell + Windows Named Pipes |
+| macOS |  Partial | launcher.sh works, Pipe buffer resize skipped in 'rtlsdr_rec_pipeline.cpp', Arduino port name differs (`/dev/tty.usbmodem*`) |
+| Windows |  Not supported | launcher.sh requires Bash, FIFO requires Unix named pipes - would need full rewrite to PowerShell + Windows Named Pipes |
 
 > **Note**: All development and testing was done on Ubuntu Linux. The Python decoder, az/el pipeline, and visualisation scripts are platform-independent. Only `launcher.sh` and `rtlsdr_rec_pipeline.cpp` are Linux-specific.
 
@@ -43,27 +43,21 @@ pip3 install pymap3d pyserial matplotlib numpy --user
 ```
 
 ## Project Structure
-
 ```
 ADS-B-based-aircraft-tracking-using-RTL-SDR/
-├── captures/                    # Raw IQ captures (.bin) — gitignored
 ├── cpp/
 │   └── rtlsdr_rec_pipeline.cpp  # C++ RTL-SDR IQ capture
 ├── scripts/
-│   └── launcher.sh              # Main entry point
-├── rtlsdr_rec_pipeline          # Compiled binary (gitignored)
+│   └── launcher.sh              # Script to start the full live pipeline 
 └── src/
     ├── decode_module/
-    │   └── adsb_decoder_pipeline.py   # ADS-B decoder (local CPR)
+    │   └── adsb_decoder_pipeline.py   # ADS-B decoder
     ├── azel_module/
     │   └── azel_pipeline.py           # Az/El computation + Arduino serial
-    ├── azel_output/                   # Az/El CSV outputs — gitignored
-    ├── output/                        # Decoded CSV outputs — gitignored
     └── visualisation/
-        ├── azel_live_plot.py          # Live az/el sky view plot
-        ├── visualise_decoder_comparison.py  # Decoder vs pyModeS comparison
-        └── plot_ADSB_data.py          # IQ signal visualizer
-
+        ├── azel_live_plot.py                # Live az/el sky view,altitude and range plots plot
+        ├── visualise_decoder_comparison.py  # Decoder csv vs pyModeS comparison
+        └── plot_ADSB_data.py                # IQ signal visualizer
 ```
 ## Installation
 
@@ -156,11 +150,4 @@ ARDUINO_PORT = '/dev/ttyUSB0'   # Linux
 Upload `antenna_tracker.ino` to Arduino Uno before running.
 
 
-## Visualisation
-
-| Script | Usage |
-|--------|-------|
-| `azel_live_plot.py` | Live sky view, altitude and range plots — run alongside launcher |
-| `plot_ADSB_data.py` | IQ signal, preamble, and spectrum plots from .bin file |
-| `visualise_decoder_comparison.py` | Compare decoder CSV vs pyModeS global CPR |
 

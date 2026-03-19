@@ -12,9 +12,21 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 
 ## Prerequisites
 
+### Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Linux |  Fully supported | Primary development platform |
+| macOS |  Partial | launcher.sh works, `F_SETPIPE_SZ` not supported (pipe buffer resize skipped), Arduino port name differs (`/dev/tty.usbmodem*`) |
+| Windows |  Not supported | launcher.sh requires Bash, FIFO requires Unix named pipes — would need full rewrite to PowerShell + Windows Named Pipes |
+
+> **Note**: All development and testing was done on Ubuntu Linux. The Python decoder, az/el pipeline, and visualisation scripts are platform-independent. Only `launcher.sh` and `rtlsdr_rec_pipeline.cpp` are Linux-specific.
+
 ### Hardware
 - RTL-SDR Dongle (e.g., RTL-SDR Blog V3/V4)
 - Antenna optimized for 1090 MHz (ADS-B frequency)
+- Microcontroller(Arduino Uno)
+- Motors and motor drivers, one each for elevation and azimuth axis 
 - Pan/Tilt Antenna Mount (for tracking)
 
 ### Software
@@ -22,6 +34,37 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 - **librtlsdr**: Driver library for RTL-SDR
 - **Python 3.x**: Core logic and controller.
 
+```bash
+# System
+sudo apt install g++ librtlsdr-dev
+
+# Python
+pip3 install pymap3d pyserial matplotlib numpy --user
+```
+
+## Project Structure
+
+```
+ADS-B-based-aircraft-tracking-using-RTL-SDR/
+├── captures/                    # Raw IQ captures (.bin) — gitignored
+├── cpp/
+│   └── rtlsdr_rec_pipeline.cpp  # C++ RTL-SDR IQ capture
+├── scripts/
+│   └── launcher.sh              # Main entry point
+├── rtlsdr_rec_pipeline          # Compiled binary (gitignored)
+└── src/
+    ├── decode_module/
+    │   └── adsb_decoder_pipeline.py   # ADS-B decoder (local CPR)
+    ├── azel_module/
+    │   └── azel_pipeline.py           # Az/El computation + Arduino serial
+    ├── azel_output/                   # Az/El CSV outputs — gitignored
+    ├── output/                        # Decoded CSV outputs — gitignored
+    └── visualisation/
+        ├── azel_live_plot.py          # Live az/el sky view plot
+        ├── visualise_decoder_comparison.py  # Decoder vs pyModeS comparison
+        └── plot_ADSB_data.py          # IQ signal visualizer
+
+```
 ## Installation
 
 1. **Clone the repository**:
@@ -43,36 +86,81 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 
 ## Usage
 
-### 1. Capture & Track
-The system is designed to capture ADS-B signals and drive the antenna tracking mechanism.
+### Live Tracking
+
+> **Linux only** — launcher.sh requires Bash and Unix FIFOs.
+> On macOS minor changes needed. Windows not supported without rewrite.
+
+1. Connect RTL-SDR dongle and antenna
+2. Connect Arduino via USB
+3. Run from project root:
 
 ```bash
-python main.py
+./scripts/launcher.sh .csv
 ```
 
-### 2. Decode Signals (Standalone)
-To decode captured binary files manually:
+4. Optionally open live plot in a second terminal:
+
 ```bash
-python adsb_decode_2.py
+python3 src/visualisation/azel_live_plot.py
 ```
-This produces `decoded_summary_2.csv` containing detected aircraft info.
 
-### 3. Verification & Visualization
-Use the tools in `src/decode_module/` to analyze decoder performance:
-- `adsb_decoder.py`: Alternative decoder implementation.
-- `visualize_comparison.py`: Compare decoder outputs.
+5. Press **Ctrl+C** to stop
 
-## Project Structure
+### Decode an Existing Capture
 
-- **Core Components**:
-  - `main.py`: Main application entry point.
-  - `src/antenna_controller.py`: Controls the antenna position (Azimuth/Elevation).
-  - `src/position_provider.py`: Supplies target aircraft coordinates.
+```bash
+python3 -m src.decode_module.adsb_decoder_pipeline \
+    --file captures/iq_samples_XXXXXXXX.bin .csv
+```
 
-- **Capture & Decode**:
-  - `rtlsdr_rec_2.cpp`: C++ IQ data recorder.
-  - `adsb_decode_2.py`: Offline decoder script.
-  - `src/decode_module/`: 
-    - `adsb_decoder.py`: Modular decoder functionality.
-    - `verify_frames.py`: Frame integrity check.
-    - `visualize_comparison.py`: Performance visualization.
+### Standalone Motor Test (no RTL-SDR needed)
+
+```bash
+python3 src/azel_module/azel_pipeline.py
+```
+
+Injects test positions every 3 seconds and drives motors via serial.
+
+## Configuration
+
+### Ground Station Coordinates
+Edit in `src/decode_module/adsb_decoder_pipeline.py`:
+```python
+RECEIVER_LAT = 8.5241   # your latitude
+RECEIVER_LON = 76.9366  # your longitude
+```
+
+Edit in `src/azel_module/azel_pipeline.py`:
+```python
+gs_lat = 8.5000
+gs_lon = 76.9000
+```
+
+### Capture Duration
+Edit in `cpp/rtlsdr_rec_pipeline.cpp`:
+```cpp
+#define CAPTURE_DURATION_SEC  10   // seconds
+```
+
+### Arduino Serial Port
+Edit in `src/azel_module/azel_pipeline.py`:
+```python
+ARDUINO_PORT = '/dev/ttyUSB0'   # Linux
+# ARDUINO_PORT = 'COM3'         # Windows
+# ARDUINO_PORT = '/dev/tty.usbmodem14201'  # macOS
+```
+
+## Arduino
+
+Upload `antenna_tracker.ino` to Arduino Uno before running.
+
+
+## Visualisation
+
+| Script | Usage |
+|--------|-------|
+| `azel_live_plot.py` | Live sky view, altitude and range plots — run alongside launcher |
+| `plot_ADSB_data.py` | IQ signal, preamble, and spectrum plots from .bin file |
+| `visualise_decoder_comparison.py` | Compare decoder CSV vs pyModeS global CPR |
+

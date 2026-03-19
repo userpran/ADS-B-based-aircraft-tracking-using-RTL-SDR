@@ -3,19 +3,20 @@
 # Runs RTL-SDR capture (C++) and ADS-B decoder (Python) in parallel.
 # The az/el pipeline starts automatically inside the decoder.
 #
-# Usage: ./launcher.sh [.csv|.json]
+# Usage: ./scripts/launcher.sh [.csv|.json]
 #   Optional arg: output format for decoded results. Defaults to no file save.
 #
 # Requirements:
 #   - rtlsdr_rec_pipeline compiled and in current directory (or on PATH)
-#   - Python decoder at src/decode_module/adsb_decoder_pipeline_2.py
+#   - Python decoder at src/decode_module/adsb_decoder_pipeline.py
 #   - RTL-SDR device connected
 
 set -euo pipefail
 
 FIFO="/tmp/iq_pipe"
 CPP_BIN="./rtlsdr_rec_pipeline"
-DECODER_MODULE="src.decode_module.adsb_decoder_pipeline_2"
+export PYTHONPATH=$(pwd)/src
+DECODER_MODULE="decode_module.adsb_decoder_pipeline"
 OUTPUT_FMT="${1:-}"          # optional: .csv or .json
 #DECODER_READY_FLAG="/tmp/.decoder_ready" #not currently used, but could be a simple file created by decoder when ready to signal the C++ code to start
 
@@ -33,7 +34,7 @@ cleanup() {
 
     # Belt-and-suspenders: kill by process name in case PID tracking drifted
     pkill -f "rtlsdr_rec_pipeline" 2>/dev/null || true
-    pkill -f "adsb_decoder_pipeline_2" 2>/dev/null || true
+    pkill -f "adsb_decoder_pipeline" 2>/dev/null || true
 
     echo "[launcher] Done."
     exit 0
@@ -44,7 +45,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 
 # ── Compile C++ if binary is missing or source is newer ──────────────────────
-CPP_SRC="src/rtlsdr_rec_pipeline.cpp"
+CPP_SRC="cpp/rtlsdr_rec_pipeline.cpp"
 
 if [ ! -f "$CPP_BIN" ] || [ "$CPP_SRC" -nt "$CPP_BIN" ]; then
     # -nt = "newer than" — recompiles if source was modified after last build
@@ -63,7 +64,7 @@ else
     echo "[launcher] Binary up to date, skipping compilation."
 fi
 
-DECODER_PATH="src/decode_module/adsb_decoder_pipeline_2.py"
+DECODER_PATH="src/decode_module/adsb_decoder_pipeline.py"
 if [ ! -f "$DECODER_PATH" ]; then
     echo "[launcher] ERROR: Decoder script not found at $DECODER_PATH"
     exit 1

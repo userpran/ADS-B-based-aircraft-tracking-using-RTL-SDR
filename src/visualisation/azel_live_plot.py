@@ -4,13 +4,13 @@ Reads the CSV being actively written by azel_pipeline.py and plots
 azimuth/elevation/range in real time using matplotlib animation.
 
 Usage (from project root):
-    python3 src/azel_module/azel_live_plot.py
+    python3 src/visualisation/azel_live_plot.py
 
     # Or point at a specific CSV:
-    python3 src/azel_module/azel_live_plot.py src/azel_module/azel_0227_1430.csv
+    python3 src/visualisation/azel_live_plot.py src/azel_output/azel_0227_1430.csv
 
 The script auto-finds the most recently modified azel_*.csv in the
-azel_module folder if no path is given.
+azel_output folder if no path is given.
 """
 
 import sys
@@ -27,12 +27,11 @@ from matplotlib.lines import Line2D
 import numpy as np
 
 # ── Config ────────────────────────────────────────────────────────────────────
-AZEL_MODULE_DIR  = os.path.join(os.path.dirname(__file__)
-                                if "__file__" in dir()
-                                else "src/azel_module")
+AZEL_MODULE_DIR = os.path.join(os.path.dirname(__file__),
+                                "..", "azel_output")
 REFRESH_MS       = 500       # plot refresh interval in milliseconds
 MAX_TRAIL_POINTS = 200       # max history points shown per aircraft on polar
-ICAO_COLORS      = plt.cm.get_cmap("tab10")
+ICAO_COLORS = plt.colormaps["tab10"]
 
 # ── Find CSV ──────────────────────────────────────────────────────────────────
 def find_latest_csv(directory):
@@ -169,10 +168,13 @@ def update(frame):
 
     last_count[0] = len(rows)
 
-    # Update per-aircraft history
-    for row in rows:
-        icao = row["icao"]
-        aircraft_history[icao].append((
+    # Only process rows we haven't seen yet
+    new_rows = rows[last_count[0]:]   # slice from last known count
+    last_count[0] = len(rows)
+
+    for row in new_rows:              
+      icao = row["icao"]
+      aircraft_history[icao].append((
             np.radians(row["az_deg"]),    # polar needs radians
             90 - row["el_deg"],           # invert: 0=zenith, 90=horizon
             row["alt_ft"],

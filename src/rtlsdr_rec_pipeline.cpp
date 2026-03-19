@@ -105,7 +105,7 @@ int main() {
      if (fifo_fd >= 0) {
         std::cout << "FIFO opened for writing." << std::endl;
         // Set pipe buffer size once here
-        fcntl(fifo_fd, F_SETPIPE_SZ, 4 * 1024 * 1024);
+        fcntl(fifo_fd, F_SETPIPE_SZ, 1 * 1024 * 1024);
         int actual = fcntl(fifo_fd, F_GETPIPE_SZ);
         std::cout << "FIFO pipe buffer: " << actual / 1024 << " KB" << std::endl;
         break;

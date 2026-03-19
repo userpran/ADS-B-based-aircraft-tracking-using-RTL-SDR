@@ -1,6 +1,7 @@
 # Binary capture files
 *.bin
 *.dat
+*.csv
 
 # directories
 iq_samples/

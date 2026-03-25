@@ -153,7 +153,8 @@ DRAIN_WAIT=0
 while kill -0 "$PID_DEC" 2>/dev/null; do
     sleep 0.5
     DRAIN_WAIT=$((DRAIN_WAIT + 1))
-    if [ $DRAIN_WAIT -ge 20 ]; then   # 10 seconds
+    
+    if [ $DRAIN_WAIT -ge 80 ]; then   # 40 seconds — enough for homing timeout + buffer   
         echo "[launcher] Decoder did not finish draining — forcing stop."
         break
     fi

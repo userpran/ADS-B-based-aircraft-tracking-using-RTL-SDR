@@ -5,7 +5,7 @@ decodes DF17 ADS-B messages, and feeds position data to the az/el pipeline.
 
 Usage:
     # File mode — test with existing recording
-    python3 -m src.decode_module.adsb_decoder_pipeline --file src/decode_module/iq_samples_20251019_172049_619.bin .csv
+    python3 -m src.decode_module.adsb_decoder_pipeline --file captures/iq_samples_20260322_190751.bin .csv
 
     # File mode — no output save
     python3 -m src.decode_module.adsb_decoder_pipeline --file src/decode_module/iq_samples_20251019_172049_619.bin
@@ -30,7 +30,7 @@ SAMPLE_RATE          = 2_000_000   # 2 Msps
 PREAMBLE_SAMPLES     = 16          # 8 µs × 2 samples/µs
 BITS_PER_FRAME       = 112
 SAMPLES_PER_BIT      = 2           # 1 µs × 2 samples/µs
-DATA_SAMPLES         = BITS_PER_FRAME * SAMPLES_PER_BIT   # 224
+DATA_SAMPLES         = BITS_PER_FRAME * SAMPLES_PER_BIT   # 224 
 FRAME_SAMPLES        = PREAMBLE_SAMPLES + DATA_SAMPLES    # 240
 FRAME_BYTES          = FRAME_SAMPLES * 2                  # IQ bytes per frame
 TAIL_BYTES           = (FRAME_SAMPLES - 1) * 2            # carry between chunks

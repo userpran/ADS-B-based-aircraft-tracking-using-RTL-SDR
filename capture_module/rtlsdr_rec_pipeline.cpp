@@ -16,7 +16,7 @@
 
 #define DEFAULT_SAMPLE_RATE   2000000   // 2 MHz for dump1090 suitable ADS-B
 #define DEFAULT_FREQUENCY     1090000000  // 1090 MHz (ADS-B)
-#define CAPTURE_DURATION_SEC  30           // Capture time in seconds
+#define CAPTURE_DURATION_SEC  60           // Capture time in seconds
 #define TOTAL_SAMPLES         (CAPTURE_DURATION_SEC * DEFAULT_SAMPLE_RATE) // Total samples to capture
 #define TOTAL_BYTES           ((size_t)CAPTURE_DURATION_SEC * DEFAULT_SAMPLE_RATE * 2) //   Total bytes captured (I+Q for each sample)
 #define BUFFER_LENGTH         (256 * 1024)  // buffer of 256 KB chunks

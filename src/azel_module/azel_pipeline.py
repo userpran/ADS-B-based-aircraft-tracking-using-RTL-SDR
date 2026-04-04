@@ -34,7 +34,11 @@ MIN_LON = -180; MAX_LON = 180
 last_alt_ft = {}
 running     = False
 thread_ref  = None
-ser_global  = None   # module-level serial handle — shared between worker and stop
+ser_global  = None   # module-level serial handle — shared between worker and stop function for homing command
+
+# Priority option:
+TRACKING_MODE = "closest"   # or "highest_el", "first_detected", "lowest_alt"
+current_target = None   # ICAO of aircraft being tracked
 
 # ── Validation ────────────────────────────────────────────────────────────────
 def valid_row(icao, lat, lon, alt_ft):
@@ -106,6 +110,14 @@ def send_to_arduino(ser, az, el):
             pass
         return None
 
+def select_target(icao, az, el, slant):
+    global current_target
+    if current_target is None:
+        current_target = icao   # lock onto first aircraft seen
+    if icao == current_target:
+        return True   # this is the target, track it
+    return False      # ignore other aircraft
+
 # ── Az/El worker thread ───────────────────────────────────────────────────────
 def azel_worker(ser):
     """
@@ -150,20 +162,20 @@ def azel_worker(ser):
             out.flush()
             print(f"{t} {icao} AZ={az:.1f}° EL={el:.1f}° Range={slant/1000:.1f} km")
 
-            if ser is not None:
+            if ser is not None and select_target(icao, az, el, slant):
                 ser = send_to_arduino(ser, az, el)
                 ser_global = ser   # keep module-level ref in sync
 
     finally:
         out.close()
         print("[AzEl] Worker stopped")
-        if ser is not None:
-            try:
-                ser.close()
-                print("[AzEl] Serial port closed.")
-            except Exception:
-                pass
-        ser_global = None
+        # if ser is not None:          # removed the ser.close() block from here as stop_azel_thread handles it
+        #     try:
+        #         ser.close()
+        #         print("[AzEl] Serial port closed.")
+        #     except Exception:
+        #         pass
+        #ser_global = None
 
 # ── Thread control ────────────────────────────────────────────────────────────
 def start_azel_thread():
@@ -190,19 +202,15 @@ def stop_azel_thread():
         thread_ref.join(timeout=2)
         print("[AzEl] Thread joined")
 
-    # Send HOME command using the module-level ser reference
-    # (worker may have already closed it so open fresh if needed)
-    if SERIAL_AVAILABLE:
+    # Use existing serial connection for HOMING (avoids Arduino reset)
+    if ser_global is not None:
         try:
-            # Open a fresh connection for homing
-            ser = serial.Serial(ARDUINO_PORT, ARDUINO_BAUDRATE, timeout=3)
-            time.sleep(1)
-            ser.reset_input_buffer()
-            ser.write(b"HOME\n")
+            ser_global.reset_input_buffer()
+            ser_global.write(b"HOME\n")
             print("[AzEl] Waiting for motors to return home...")
             deadline = time.time() + 30
             while time.time() < deadline:
-                response = ser.readline().decode().strip()
+                response = ser_global.readline().decode().strip()
                 if "Homed" in response:
                     print("[AzEl] Motors at home position.")
                     break
@@ -210,9 +218,12 @@ def stop_azel_thread():
                     print(f"[AzEl] Arduino: {response}")
             else:
                 print("[AzEl] WARNING: Homing timeout.")
-            ser.close()
+            ser_global.close()
+            print("[AzEl] Serial port closed.")
         except Exception as e:
             print(f"[AzEl] Could not home Arduino: {e}")
+    else:
+        print("[AzEl] Arduino not connected — skipping home.")
 
 # ── Standalone test ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -224,49 +235,32 @@ if __name__ == "__main__":
     import threading as _t
     def inject_test_data():
         test_positions = [
-    # ── Sweep North → Southeast (AZ 0° → 120°) — 20 steps ───────────────
-    ("0x123456", 9.60, 76.90, 4000),   # AZ ~0°
-    ("0x123456", 9.55, 76.96, 4000),   # AZ ~6°
-    ("0x123456", 9.50, 77.02, 4000),   # AZ ~12°
-    ("0x123456", 9.44, 77.08, 4000),   # AZ ~18°
-    ("0x123456", 9.38, 77.14, 4000),   # AZ ~24°
-    ("0x123456", 9.30, 77.19, 4000),   # AZ ~30°
-    ("0x123456", 9.22, 77.24, 4000),   # AZ ~36°
-    ("0x123456", 9.13, 77.29, 4000),   # AZ ~42°
-    ("0x123456", 9.03, 77.33, 4000),   # AZ ~48°
-    ("0x123456", 8.93, 77.37, 4000),   # AZ ~54°
-    ("0x123456", 8.82, 77.41, 4000),   # AZ ~60°
-    ("0x123456", 8.71, 77.47, 4000),   # AZ ~66°
-    ("0x123456", 8.62, 77.53, 4000),   # AZ ~72°
-    ("0x123456", 8.55, 77.59, 4000),   # AZ ~78°
-    ("0x123456", 8.51, 77.65, 4000),   # AZ ~84°
-    ("0x123456", 8.50, 77.71, 4000),   # AZ ~90°
-    ("0x123456", 8.38, 77.68, 4000),   # AZ ~96°
-    ("0x123456", 8.25, 77.63, 4000),   # AZ ~102°
-    ("0x123456", 8.10, 77.55, 4000),   # AZ ~111°
-    ("0x123456", 7.90, 77.40, 4000),   # AZ ~120°
+    # ── Far NW — low elevation, AZ ~315° ─────────────────────────────────
+      ("0x123456", 9.80, 75.80, 5000),   # AZ~315° EL~3°   far NW
+      ("0x123456", 9.70, 75.90, 5000),   # AZ~320° EL~4°
+      ("0x123456", 9.60, 76.00, 5000),   # AZ~325° EL~5°
+      ("0x123456", 9.50, 76.10, 5000),   # AZ~330° EL~6°
+      ("0x123456", 9.35, 76.25, 5000),   # AZ~335° EL~8°
+      ("0x123456", 9.20, 76.40, 5000),   # AZ~340° EL~11°
+      ("0x123456", 9.05, 76.55, 5000),   # AZ~345° EL~15°
+      ("0x123456", 8.90, 76.65, 5000),   # AZ~350° EL~20°
 
-    # ── Return Southeast → North (AZ 120° → 0°) — 20 steps ───────────────
-    ("0x123456", 8.10, 77.55, 4000),   # AZ ~111°
-    ("0x123456", 8.25, 77.63, 4000),   # AZ ~102°
-    ("0x123456", 8.38, 77.68, 4000),   # AZ ~96°
-    ("0x123456", 8.50, 77.71, 4000),   # AZ ~90°
-    ("0x123456", 8.51, 77.65, 4000),   # AZ ~84°
-    ("0x123456", 8.55, 77.59, 4000),   # AZ ~78°
-    ("0x123456", 8.62, 77.53, 4000),   # AZ ~72°
-    ("0x123456", 8.71, 77.47, 4000),   # AZ ~66°
-    ("0x123456", 8.82, 77.41, 4000),   # AZ ~60°
-    ("0x123456", 8.93, 77.37, 4000),   # AZ ~54°
-    ("0x123456", 9.03, 77.33, 4000),   # AZ ~48°
-    ("0x123456", 9.13, 77.29, 4000),   # AZ ~42°
-    ("0x123456", 9.22, 77.24, 4000),   # AZ ~36°
-    ("0x123456", 9.30, 77.19, 4000),   # AZ ~30°
-    ("0x123456", 9.38, 77.14, 4000),   # AZ ~24°
-    ("0x123456", 9.44, 77.08, 4000),   # AZ ~18°
-    ("0x123456", 9.50, 77.02, 4000),   # AZ ~12°
-    ("0x123456", 9.55, 76.96, 4000),   # AZ ~6°
-    ("0x123456", 9.60, 76.90, 4000),   # AZ ~0°
-]
+    # ── Approaching overhead — elevation rising sharply ───────────────────
+      ("0x123456", 8.75, 76.75, 5000),   # AZ~355° EL~28°
+      ("0x123456", 8.65, 76.82, 5000),   # AZ~358° EL~38°
+      ("0x123456", 8.58, 76.87, 5000),   # AZ~359° EL~50°
+      ("0x123456", 8.53, 76.90, 5000),   # AZ~0°   EL~65°  nearly overhead
+      ("0x123456", 8.51, 76.91, 5000),   # AZ~10°  EL~75°  almost directly above
+      ("0x123456", 8.50, 76.92, 5000),   # AZ~90°  EL~80°  peak elevation
+
+    # ── Moving away to SE — elevation dropping, AZ swinging to SE ─────────
+      ("0x123456", 8.48, 76.95, 5000),   # AZ~100° EL~65°
+      ("0x123456", 8.45, 77.05, 5000),   # AZ~110° EL~45°
+      ("0x123456", 8.40, 77.15, 5000),   # AZ~115° EL~30°
+      ("0x123456", 8.30, 77.25, 5000),   # AZ~118° EL~20°
+      ("0x123456", 8.15, 77.35, 5000),   # AZ~120° EL~12°
+      ("0x123456", 7.95, 77.45, 5000),   # AZ~122° EL~7°   far SE
+    ]
         for pos in test_positions:
             time.sleep(0.5)
             print(f"[Test] Injecting position: {pos}")

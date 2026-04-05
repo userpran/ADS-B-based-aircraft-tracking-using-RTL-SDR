@@ -139,9 +139,6 @@ def azel_worker(ser):
                      "az_deg", "el_deg", "range_m"])
     print(f"[AzEl] Writing to: {filename}")
     
-    # ── Serial setup (optional) ───────────────────────────────────────────────
-    # try_open_serial() returns None silently if Arduino is not connected.
-    #ser = try_open_serial()
 
     try:
         while running or not data_q.empty():
@@ -228,7 +225,7 @@ def stop_azel_thread():
 # ── Standalone test ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # TEMPORARY MOTOR TEST — only runs when azel_pipeline.py run standalone
-    # run with: python3 src/azel_module/azel_pipeline.py
+    # run with: python3 azel_module/azel_pipeline.py
 
     start_azel_thread()
 

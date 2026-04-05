@@ -13,6 +13,8 @@ output/
 
 # Python
 __pycache__/
+*.pyc
+*.pyo
 
 # Logs
 *.log
@@ -20,11 +22,9 @@ __pycache__/
 # ADS-B pipeline
 rtlsdr_rec_pipeline
 captures/
-src/output/
-src/azel_output/
-*.pyc
-src/**/__pycache__/
-*.pyo
+decoder_output/
+azel_output/
+
 
 #MacOS metadata files
 .DS_Store

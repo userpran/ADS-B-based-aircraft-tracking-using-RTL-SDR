@@ -4,10 +4,10 @@ Reads the CSV being actively written by azel_pipeline.py and plots
 azimuth/elevation/range in real time using matplotlib animation.
 
 Usage (from project root):
-    python3 src/visualisation/azel_live_plot.py
+    python3 visualisation/azel_live_plot.py
 
     # Or point at a specific CSV:
-    python3 src/visualisation/azel_live_plot.py src/azel_output/azel_0227_1430.csv
+    python3 visualisation/azel_live_plot.py azel_output/azel_0227_1430.csv
 
 The script auto-finds the most recently modified azel_*.csv in the
 azel_output folder if no path is given.

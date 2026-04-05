@@ -8,15 +8,16 @@
 #
 # Requirements:
 #   - rtlsdr_rec_pipeline compiled and in current directory (or on PATH)
-#   - Python decoder at src/decode_module/adsb_decoder_pipeline.py
+#   - Python decoder at decoder_module/adsb_decoder_pipeline.py
 #   - RTL-SDR device connected
 
 set -euo pipefail
 
 FIFO="/tmp/iq_pipe"
 CPP_BIN="./rtlsdr_rec_pipeline"
-export PYTHONPATH=$(pwd)/src
-DECODER_MODULE="decode_module.adsb_decoder_pipeline"
+export PYTHONPATH=$(pwd)   
+DECODER_MODULE="decoder_module.adsb_decoder_pipeline"  
+
 OUTPUT_FMT="${1:-}"          # optional: .csv or .json
 #DECODER_READY_FLAG="/tmp/.decoder_ready" #not currently used, but could be a simple file created by decoder when ready to signal the C++ code to start
 
@@ -45,7 +46,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 
 # ── Compile C++ if binary is missing or source is newer ──────────────────────
-CPP_SRC="cpp/rtlsdr_rec_pipeline.cpp"
+CPP_SRC="capture_module/rtlsdr_rec_pipeline.cpp"
 
 if [ ! -f "$CPP_BIN" ] || [ "$CPP_SRC" -nt "$CPP_BIN" ]; then
     # -nt = "newer than" — recompiles if source was modified after last build
@@ -53,18 +54,17 @@ if [ ! -f "$CPP_BIN" ] || [ "$CPP_SRC" -nt "$CPP_BIN" ]; then
         echo "[launcher] ERROR: Source file $CPP_SRC not found."
         exit 1
     fi
-    echo "[launcher] Compiling $CPP_SRC..." #command: g++ -o rtlsdr_rec_pipeline rtlsdr_rec_pipeline.cpp -lrtlsdr
-    g++ -O2 -o "$CPP_BIN" "$CPP_SRC" -lrtlsdr 
-    if [ $? -ne 0 ]; then
-        echo "[launcher] ERROR: Compilation failed."
-        exit 1
+    echo "[launcher] Compiling $CPP_SRC..." #command: g++ -o rtlsdr_rec_pipeline capture_module/rtlsdr_rec_pipeline.cpp -lrtlsdr
+    if ! g++ -O2 -o "$CPP_BIN" "$CPP_SRC" -lrtlsdr; then
+     echo "[launcher] ERROR: Compilation failed."
+     exit 1
     fi
     echo "[launcher] Compilation successful."
 else
     echo "[launcher] Binary up to date, skipping compilation."
 fi
 
-DECODER_PATH="src/decode_module/adsb_decoder_pipeline.py"
+DECODER_PATH="decoder_module/adsb_decoder_pipeline.py"
 if [ ! -f "$DECODER_PATH" ]; then
     echo "[launcher] ERROR: Decoder script not found at $DECODER_PATH"
     exit 1

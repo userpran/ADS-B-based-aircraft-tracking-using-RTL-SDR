@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-ADS-B Decoder Comparison — src/visualisation/visualise_decoder_comparison.py
-Compares your decoder's CSV output against pyModeS global CPR decoded from the same .bin IQ file.
+Compares your ADS-B decoder's CSV output against pyModeS global CPR decoded from the same .bin IQ file.
 
   Blue: your custom decoder (local CPR) — from CSV
   Red:  pyModeS global CPR — decoded fresh from .bin
@@ -11,7 +10,7 @@ show 0 valid positions - it needs both. This is expected for short duration capt
 (Hence why local cpr decoder is useful)
 
 Usage:
-    python3 src/visualisation/visualise_decoder_comparison.py
+    python3 visualisation/visualise_decoder_comparison.py
 """
 
 import os
@@ -22,11 +21,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # ── Project root ──────────────────────────────────────────────────────────────
-PROJECT_ROOT = os.path.dirname(
-               os.path.dirname(
-               os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
-
 # ── pyModeS ───────────────────────────────────────────────────────────────────
 try:
     import pyModeS as pms
@@ -36,7 +32,7 @@ except ImportError:
     sys.exit(1)
 
 # ── Config — edit these for each new capture ──────────────────────────────────
-DECODER_CSV = os.path.join(PROJECT_ROOT, "src", "output",
+DECODER_CSV = os.path.join(PROJECT_ROOT, "decoder_output",
                            "20260305", "output1957.csv")
 
 BIN_FILE    = os.path.join(PROJECT_ROOT, "captures",

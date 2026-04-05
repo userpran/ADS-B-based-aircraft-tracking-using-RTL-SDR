@@ -5,16 +5,16 @@ decodes DF17 ADS-B messages, and feeds position data to the az/el pipeline.
 
 Usage:
     # File mode — test with existing recording
-    python3 -m src.decode_module.adsb_decoder_pipeline --file captures/iq_samples_20260322_190751.bin .csv
+    python3 -m decoder_module.adsb_decoder_pipeline --file captures/iq_samples_20260322_190751.bin .csv
 
     # File mode — no output save
-    python3 -m src.decode_module.adsb_decoder_pipeline --file src/decode_module/iq_samples_20251019_172049_619.bin
+    python3 -m decoder_module.adsb_decoder_pipeline --file src/decode_module/iq_samples_20251019_172049_619.bin
 
     # Live FIFO mode — no output save (launcher handles this normally)
-    python3 -m src.decode_module.adsb_decoder_pipeline
+    python3 -m decoder_module.adsb_decoder_pipeline
 
     # Live FIFO mode — save CSV
-    python3 -m src.decode_module.adsb_decoder_pipeline .csv
+    python3 -m decoder_module.adsb_decoder_pipeline .csv
 """
 
 import numpy as np
@@ -23,7 +23,7 @@ import os
 import math
 import time
 from collections import defaultdict
-from src.azel_module.azel_pipeline import submit_decoded_position
+from azel_module.azel_pipeline import start_azel_thread, stop_azel_thread, submit_decoded_position
 
 # ── Constants ────────────────────────────────────────────────────────────────
 SAMPLE_RATE          = 2_000_000   # 2 Msps
@@ -394,7 +394,7 @@ def save_output(valid_signals, ext):
 
     script_dir   = os.path.dirname(os.path.abspath(__file__))  # decode_module/
     project_root = os.path.dirname(script_dir)                  # src/
-    out_dir      = os.path.join(project_root, "output", date_str)
+    out_dir      = os.path.join(project_root, "decoder_output", date_str)
     os.makedirs(out_dir, exist_ok=True)
 
     out_path = os.path.join(out_dir, f"output{time_str}{ext}")
@@ -456,7 +456,6 @@ def parse_args():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    from src.azel_module.azel_pipeline import start_azel_thread, stop_azel_thread
 
     mode, file_path, out_ext = parse_args()
 

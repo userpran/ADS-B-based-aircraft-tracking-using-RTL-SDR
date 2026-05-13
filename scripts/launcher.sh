@@ -29,12 +29,24 @@ cleanup() {
     echo ""
     echo "[launcher] Shutting down..."
 
-    # Kill by stored PIDs
-    [ -n "$PID_DEC" ] && kill "$PID_DEC" 2>/dev/null && echo "[launcher] Decoder stopped."
+    # Stop C++ capture first so FIFO write-end closes
     [ -n "$PID_CPP" ] && kill "$PID_CPP" 2>/dev/null && echo "[launcher] Capture stopped."
-
-    # Belt-and-suspenders: kill by process name in case PID tracking drifted
     pkill -f "rtlsdr_rec_pipeline" 2>/dev/null || true
+
+    # Wait for decoder to drain buffer and home motors before killing it   
+    echo "[launcher] Waiting for decoder to drain and home motors..."
+    DRAIN_WAIT=0
+    while kill -0 "$PID_DEC" 2>/dev/null; do
+        sleep 0.5
+        DRAIN_WAIT=$((DRAIN_WAIT + 1))
+        if [ $DRAIN_WAIT -ge 80 ]; then   # 40 seconds
+            echo "[launcher] Decoder did not finish — forcing stop."
+            break
+        fi
+    done
+
+    # Now kill decoder
+    [ -n "$PID_DEC" ] && kill "$PID_DEC" 2>/dev/null && echo "[launcher] Decoder stopped."
     pkill -f "adsb_decoder_pipeline" 2>/dev/null || true
 
     echo "[launcher] Done."
@@ -42,8 +54,7 @@ cleanup() {
 }
 
 trap cleanup SIGINT SIGTERM EXIT
-
-# ── Sanity checks ─────────────────────────────────────────────────────────────
+ 
 
 # ── Compile C++ if binary is missing or source is newer ──────────────────────
 CPP_SRC="capture_module/rtlsdr_rec_pipeline.cpp"
@@ -85,15 +96,11 @@ else
     echo "[launcher] FIFO already exists: $FIFO"
 fi
 
-# after FIFO creation (requires sudo once) #removed because we set it from C++ with fcntl(F_SETPIPE_SZ) which works without sudo
-#sudo sysctl -w fs.pipe-max-size=4194304  # 4MB 
-#sudo sysctl -w fs.pipe-user-pages-soft=0
-
 echo "[launcher] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "[launcher]  RTL-SDR ADS-B Pipeline"
 echo "[launcher] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── Step 1: Start the decoder FIRST (it is the FIFO reader) ──────────────────
+# Start the decoder FIRST (it is the FIFO reader) ──────────────────
 # The FIFO open() for writing in C++ will BLOCK until a reader opens it.
 # So we must start the decoder (reader) before the C++ writer.
 # We wrap it in a loop for auto-restart on crash.
@@ -122,15 +129,15 @@ PID_DEC=$!
 echo "[launcher] Decoder started (PID $PID_DEC)"
 
 # Give Python time to start up and open the FIFO
-sleep 3
+#sleep 3
 
-# ── Step 2: Wait until decoder has opened the FIFO before starting C++ ───────
+# Wait until decoder has opened the FIFO before starting C++ ───────
 
 echo "[launcher] Waiting for decoder to initialise..."
 sleep 3
-echo "[launcher] Starting C++ capture..."
 
-# ── Step 3: Start C++ capture (FIFO writer) ───────────────────────────────────
+# ── Start C++ capture (FIFO writer) ──────────────────────────────────────────
+echo "[launcher] Starting C++ capture..."
 "$CPP_BIN" &
 PID_CPP=$!
 echo "[launcher] C++ capture started (PID $PID_CPP)"
@@ -138,24 +145,13 @@ echo "[launcher] ━━━━━━━━━━━━━━━━━━━━━
 echo "[launcher] All processes running. Press Ctrl+C to stop."
 echo "[launcher] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── Step 4: Monitor — exit when C++ capture finishes ─────────────────────────
-# The C++ process runs for a fixed duration (CAPTURE_DURATION_SEC = 5s).
+# Exit when C++ capture finishes ─────────────────────────
+# The C++ process runs for a fixed duration (CAPTURE_DURATION_SEC = 60s) or until siginit is received
 # When it exits, the FIFO write-end closes, the decoder sees EOF and exits cleanly.
 # We wait on the C++ PID specifically so the script doesn't hang forever.
 
 wait "$PID_CPP"
 CPP_EXIT=$?
 echo "[launcher] C++ capture finished (exit $CPP_EXIT)."
-echo "[launcher] Waiting for decoder to finish processing remaining buffer..."
+# cleanup() will be called automatically via EXIT trap
 
-# Give decoder up to 10 seconds to drain whatever is left in its carry buffer
-DRAIN_WAIT=0
-while kill -0 "$PID_DEC" 2>/dev/null; do
-    sleep 0.5
-    DRAIN_WAIT=$((DRAIN_WAIT + 1))
-    
-    if [ $DRAIN_WAIT -ge 80 ]; then   # 40 seconds — enough for homing timeout + buffer   
-        echo "[launcher] Decoder did not finish draining — forcing stop."
-        break
-    fi
-done

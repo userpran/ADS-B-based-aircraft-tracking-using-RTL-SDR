@@ -14,7 +14,7 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 # ── Arduino serial config ─────────────────────────────────────────────────────
-ARDUINO_PORT     = '/dev/ttyUSB0'
+ARDUINO_PORT     = '/dev/ttyUSB0' #update according to which USB port the Arduino is on. 
 ARDUINO_BAUDRATE = 115200
 
 # ── Shared queue ──────────────────────────────────────────────────────────────

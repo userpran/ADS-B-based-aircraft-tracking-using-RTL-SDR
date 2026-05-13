@@ -12,11 +12,23 @@
 #include <thread>
 #include <unistd.h>  //for write(), close(), ssize_t
 //#include <sys/stat.h> // for mkfifo (not used as FIFO creation is handled in launcher script)
+#include <csignal> 
+#include <atomic> // for atomic flag to handle graceful shutdown on signal
 
+// Global flag set by signal handler, checked in capture loop
+std::atomic<bool> stop_capture(false);
+
+void signal_handler(int signum) {
+    if (signum == SIGTERM)
+        std::cout << "\n[Capture] SIGTERM received — stopping capture..." << std::endl;
+    else
+        std::cout << "\n[Capture] SIGINT received — stopping capture..." << std::endl;
+    stop_capture = true;
+}
 
 #define DEFAULT_SAMPLE_RATE   2000000   // 2 MHz for dump1090 suitable ADS-B
 #define DEFAULT_FREQUENCY     1090000000  // 1090 MHz (ADS-B)
-#define CAPTURE_DURATION_SEC  60           // Capture time in seconds
+#define CAPTURE_DURATION_SEC  90           // Capture time in seconds
 #define TOTAL_SAMPLES         (CAPTURE_DURATION_SEC * DEFAULT_SAMPLE_RATE) // Total samples to capture
 #define TOTAL_BYTES           ((size_t)CAPTURE_DURATION_SEC * DEFAULT_SAMPLE_RATE * 2) //   Total bytes captured (I+Q for each sample)
 #define BUFFER_LENGTH         (256 * 1024)  // buffer of 256 KB chunks
@@ -70,6 +82,10 @@ int main() {
     rtlsdr_reset_buffer(dev); // Reset the internal buffer
     // After rtlsdr_reset_buffer(dev):
     std::this_thread::sleep_for(std::chrono::milliseconds(200)); // USB settle time
+
+    // Register signal handler
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);  // handle launcher's kill too
     
     std::cout << "Tuned to " << DEFAULT_FREQUENCY / 1e6 << " MHz, "
               << "Sample Rate = " << DEFAULT_SAMPLE_RATE / 1e6 << " MHz" << std::endl;
@@ -136,7 +152,7 @@ int main() {
 
     auto start_time = std::chrono::steady_clock::now(); // Start time for capture duration measurement
     
-    while (total_bytes_captured < TOTAL_BYTES) { // Continue until total bytes captured reaches target
+    while (total_bytes_captured < TOTAL_BYTES && !stop_capture) { // Continue until total bytes captured reaches target and no stop signal received
         // condition ? value_if_true : value_if_false
         size_t bytes_to_read = TOTAL_BYTES - total_bytes_captured;
         if (bytes_to_read > BUFFER_LENGTH) bytes_to_read = BUFFER_LENGTH;

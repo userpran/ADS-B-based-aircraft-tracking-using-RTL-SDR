@@ -10,7 +10,7 @@ show 0 valid positions - it needs both. This is expected for short duration capt
 (Hence why local cpr decoder is useful)
 
 Usage:
-    python3 visualisation/visualise_decoder_comparison.py
+    python3 src/visualisation/visualise_decoder_comparison.py
 """
 
 import os
@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # ── Project root ──────────────────────────────────────────────────────────────
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 # ── pyModeS ───────────────────────────────────────────────────────────────────
 try:

@@ -4,10 +4,10 @@ Reads the CSV being actively written by azel_pipeline.py and plots
 azimuth/elevation/range in real time using matplotlib animation.
 
 Usage (from project root):
-    python3 visualisation/azel_live_plot.py
+    python3 src/visualisation/azel_live_plot.py
 
     # Or point at a specific CSV:
-    python3 visualisation/azel_live_plot.py azel_output/azel_0227_1430.csv
+    python3 src/visualisation/azel_live_plot.py azel_output/azel_0227_1430.csv
 
 The script auto-finds the most recently modified azel_*.csv in the
 azel_output folder if no path is given.
@@ -28,7 +28,7 @@ import numpy as np
 
 # ── Config ────────────────────────────────────────────────────────────────────
 AZEL_MODULE_DIR = os.path.join(os.path.dirname(__file__),
-                                "..", "azel_output")
+                                "..", "..", "azel_output")
 REFRESH_MS       = 500       # plot refresh interval in milliseconds
 MAX_TRAIL_POINTS = 200       # max history points shown per aircraft on polar
 ICAO_COLORS = plt.colormaps["tab10"]

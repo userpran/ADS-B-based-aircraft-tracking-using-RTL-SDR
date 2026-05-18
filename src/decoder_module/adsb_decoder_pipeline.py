@@ -5,16 +5,16 @@ decodes DF17 ADS-B messages, and feeds position data to the az/el pipeline.
 
 Usage:
     # File mode — test with existing recording
-    python3 -m decoder_module.adsb_decoder_pipeline --file captures/iq_samples_20260322_190751.bin .csv
+    python3 -m src.decoder_module.adsb_decoder_pipeline --file captures/iq_samples_20260322_190751.bin .csv
 
     # File mode — no output save
-    python3 -m decoder_module.adsb_decoder_pipeline --file src/decode_module/iq_samples_20251019_172049_619.bin
+    python3 -m src.decoder_module.adsb_decoder_pipeline --file src/decoder_module/iq_samples_20251019_172049_619.bin
 
     # Live FIFO mode — no output save (launcher handles this normally)
-    python3 -m decoder_module.adsb_decoder_pipeline
+    python3 -m src.decoder_module.adsb_decoder_pipeline
 
     # Live FIFO mode — save CSV
-    python3 -m decoder_module.adsb_decoder_pipeline .csv
+    python3 -m src.decoder_module.adsb_decoder_pipeline .csv
 """
 
 import numpy as np
@@ -23,7 +23,7 @@ import os
 import math
 import time
 from collections import defaultdict
-from azel_module.azel_pipeline import start_azel_thread, stop_azel_thread, submit_decoded_position
+from src.azel_module.azel_pipeline import start_azel_thread, stop_azel_thread, submit_decoded_position
 
 # ── Constants ────────────────────────────────────────────────────────────────
 SAMPLE_RATE          = 2_000_000   # 2 Msps
@@ -392,8 +392,8 @@ def save_output(valid_signals, ext):
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M")
 
-    script_dir   = os.path.dirname(os.path.abspath(__file__))  # decode_module/
-    project_root = os.path.dirname(script_dir)                  # src/
+    script_dir   = os.path.dirname(os.path.abspath(__file__))  # src/decoder_module/
+    project_root = os.path.dirname(os.path.dirname(script_dir))                  # project_root/
     out_dir      = os.path.join(project_root, "decoder_output", date_str)
     os.makedirs(out_dir, exist_ok=True)
 

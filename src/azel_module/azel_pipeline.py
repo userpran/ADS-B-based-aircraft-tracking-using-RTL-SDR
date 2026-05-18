@@ -130,7 +130,7 @@ def azel_worker(ser):
     # ── CSV setup ─────────────────────────────────────────────────────────────
     now        = datetime.now()
     module_dir = os.path.dirname(__file__)
-    output_dir = os.path.join(module_dir, "..", "azel_output")
+    output_dir = os.path.join(module_dir, "..", "..", "azel_output")
     os.makedirs(output_dir, exist_ok=True)
     filename   = os.path.join(output_dir, f"azel_{now.strftime('%m%d_%H%M')}.csv")
     out        = open(filename, "w", newline="")
@@ -225,7 +225,7 @@ def stop_azel_thread():
 # ── Standalone test ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # TEMPORARY MOTOR TEST — only runs when azel_pipeline.py run standalone
-    # run with: python3 azel_module/azel_pipeline.py
+    # run with: python3 src/azel_module/azel_pipeline.py
 
     start_azel_thread()
 

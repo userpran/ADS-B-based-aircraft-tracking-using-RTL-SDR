@@ -1,13 +1,13 @@
 # ADS-B Aircraft Tracking with RTL-SDR
 
-A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals using an RTL-SDR dongle.
+A real-time dual axis aircraft tracking system based on ADS–B signals using RTL-SDR, custom Mode S decoding, and Arduino-based antenna positioning.
 
 ## Features
 
 - **Antenna Tracking**: Real-time calculation of Azimuth and Elevation to point an antenna at a target aircraft.
 - **Data Capture**: High-speed IQ sample capture (2 MHz) centered at 1090 MHz using `librtlsdr`.
 - **Decoding**: Custom implementation for Mode S preamble detection and message decoding.
-- **Integration**: Modular design with `position_provider`, `antenna_controller`, and `decode_module`.
+- **Integration**: Modular design with `position_provider`, `antenna_controller`, and `decoder_module`.
 - **Visualization**: Generate plots for aircraft position, altitude, azimuth, elevation, and range.
 
 ## Prerequisites
@@ -30,7 +30,7 @@ A comprehensive tool for tracking an antenna to an aircraft using ADS-B signals 
 - Pan/Tilt Antenna Mount (for tracking)
 
 ### Software
-- **C++ Compiler**: `g++`, `clang`, or MSVC (for building the capture tool)
+- **C++ Compiler**: `g++` or `clang`
 - **librtlsdr**: Driver library for RTL-SDR
 - **Python 3.x**: Core logic and controller.
 
@@ -46,21 +46,37 @@ pip3 install pymap3d pyserial matplotlib numpy --user
 ```
 ADS-B-based-aircraft-tracking-using-RTL-SDR/
 ├── scripts/
-│   └── launcher.sh              # Script to start the full live pipeline 
+│   └── launcher.sh                          # Script to start the full live pipeline 
 └── src/
     ├── capture_module/
-    │   └── rtlsdr_rec_pipeline.cpp # C++ RTL-SDR IQ capture
+    │   └── rtlsdr_rec_pipeline.cpp          # C++ RTL-SDR IQ capture
     ├── decoder_module/
-    │   └── adsb_decoder_pipeline.py   # ADS-B decoder
+    │   └── adsb_decoder_pipeline.py         # ADS-B decoder
     ├── azel_module/
-    │   └── azel_pipeline.py           # Az/El computation + Arduino serial
+    │   └── azel_pipeline.py                 # Az/El computation + Arduino serial
     └── visualisation/
-        ├── azel_live_plot.py                # Live azimuth/elevation sky view with altitude and range plots
-        ├── visualise_decoder_comparison.py  # Decoder csv vs pyModeS comparison
+        ├── azel_live_plot.py                # Live azimuth/elevation view with altitude and range plots
+        ├── visualise_decoder_comparison.py  # Decoder csv output vs pyModeS comparison
         └── plot_ADSB_data.py                # IQ signal visualizer
 ├── arduino/
-│   └── antenna_tracker.ino              # Code for arduino
+│   └── antenna_tracker.ino                  # Code for arduino
 ```
+
+## System Pipeline
+
+RTL-SDR → IQ Capture → ADS-B Decoder → Position Extraction → Azimuth/Elevation Calculation → Arduino → Pan/Tilt Motors
+
+<p align="center">
+  <img src="assets/aircraft_tracker_block_diagram.png" width="700">
+</p>
+
+## Circuit Diagram
+
+<p align="center">
+  <img src="assets/circuit_diagram_dual_axis_motor_control.png" width="700">
+</p>
+
+
 ## Installation
 
 1. **Clone the repository**
@@ -70,7 +86,8 @@ ADS-B-based-aircraft-tracking-using-RTL-SDR/
    
    **Linux/WSL/MinGW:**
    ```bash
-   g++ rtlsdr_rec_pipeline.cpp -o rtlsdr_rec_pipeline -lrtlsdr
+    g++ src/capture_module/rtlsdr_rec_pipeline.cpp \
+    -o rtlsdr_rec_pipeline -lrtlsdr
    ```
 
 ## Usage
@@ -99,7 +116,7 @@ python3 src/visualisation/azel_live_plot.py
 ### Decode an Existing Capture
 
 ```bash
-python3 -m src.decode_module.adsb_decoder_pipeline \
+python3 -m src.decoder_module.adsb_decoder_pipeline \
     --file captures/iq_samples_XXXXXXXX.bin .csv
 ```
 
@@ -109,12 +126,10 @@ python3 -m src.decode_module.adsb_decoder_pipeline \
 python3 src/azel_module/azel_pipeline.py
 ```
 
-Injects test positions every 3 seconds and drives motors via serial.
-
 ## Configuration
 
 ### Ground Station Coordinates
-Edit in `src/decode_module/adsb_decoder_pipeline.py`:
+Edit in `src/decoder_module/adsb_decoder_pipeline.py`:
 ```python
 RECEIVER_LAT = 8.5000   # your latitude
 RECEIVER_LON = 76.9000  # your longitude
@@ -127,7 +142,7 @@ gs_lon = 76.9000
 ```
 
 ### Capture Duration
-Edit in `cpp/rtlsdr_rec_pipeline.cpp`:
+Edit in `src/capture_module/rtlsdr_rec_pipeline.cpp`:
 ```cpp
 #define CAPTURE_DURATION_SEC  10   // seconds
 ```
@@ -143,4 +158,9 @@ ARDUINO_PORT = '/dev/ttyUSB0'              # Linux
 Upload `antenna_tracker.ino` to Arduino Uno before running.
 
 
+## Contributors
 
+- [@userpran](https://github.com/userpran)
+- [@avantika-adiyodi](https://github.com/avantika-adiyodi)
+- [@nandithavinodnair894-cpu](https://github.com/nandithavinodnair894-cpu)
+- [@hanismohd](https://github.com/hanismohd)

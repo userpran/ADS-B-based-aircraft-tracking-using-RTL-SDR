@@ -73,7 +73,7 @@ RTL-SDR → IQ Capture → ADS-B Decoder → Position Extraction → Azimuth/Ele
 ## Circuit Diagram
 
 <p align="center">
-  <img src="assets/circuit_diagram_dual_axis_motor_control.png" width="700">
+  <img src="assets/circuit_diagram_dual_axis_motor_control.png" height="500">
 </p>
 
 
@@ -83,8 +83,7 @@ RTL-SDR → IQ Capture → ADS-B Decoder → Position Extraction → Azimuth/Ele
 
 2. **Compile the Recorder**:
    Ensure you have the `librtlsdr` headers and library available.
-   
-   **Linux/WSL/MinGW:**
+
    ```bash
     g++ src/capture_module/rtlsdr_rec_pipeline.cpp \
     -o rtlsdr_rec_pipeline -lrtlsdr
@@ -95,7 +94,7 @@ RTL-SDR → IQ Capture → ADS-B Decoder → Position Extraction → Azimuth/Ele
 ### Live Tracking
 
 > **Linux only** — launcher.sh requires Bash and Unix FIFOs.
-> On macOS minor changes needed. Windows not supported without rewrite.
+> Minor changes are needed to use on MacOS. Windows is not supported without rewrite.
 
 1. Connect RTL-SDR dongle and antenna
 2. Connect Arduino via USB
@@ -111,7 +110,7 @@ RTL-SDR → IQ Capture → ADS-B Decoder → Position Extraction → Azimuth/Ele
 python3 src/visualisation/azel_live_plot.py
 ```
 
-5. Press **Ctrl+C** to stop
+5. System auto-exits after 90 seconds or press **Ctrl+C** to stop before
 
 ### Decode an Existing Capture
 
@@ -137,14 +136,14 @@ RECEIVER_LON = 76.9000  # your longitude
 
 Edit in `src/azel_module/azel_pipeline.py`:
 ```python
-gs_lat = 8.5000
-gs_lon = 76.9000
+gs_lat = 8.5000   # your latitude
+gs_lon = 76.9000  # your longitude
 ```
 
 ### Capture Duration
 Edit in `src/capture_module/rtlsdr_rec_pipeline.cpp`:
 ```cpp
-#define CAPTURE_DURATION_SEC  10   // seconds
+#define CAPTURE_DURATION_SEC  90   // seconds
 ```
 
 ### Arduino Serial Port
